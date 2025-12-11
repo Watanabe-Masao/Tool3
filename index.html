@@ -53,6 +53,7 @@
       <div class="header-actions">
         <button class="btn btn-success" onclick="showAddProductModal()">➕ 新商品</button>
         <button class="btn btn-primary" onclick="showSaveModal()">💾 保存</button>
+        <button class="btn btn-cloud" onclick="showCloudSyncModal()" title="クラウド同期">☁️ 同期</button>
         <button class="btn" onclick="printTable()">🖨️ 印刷</button>
         <button class="btn" onclick="exportToExcel()">📊 Excel</button>
         <button class="btn" onclick="exportToCSV()">📄 CSV</button>
@@ -231,8 +232,88 @@
       <label>保存名:</label>
       <input type="text" id="save-name" placeholder="例: 2024年1月分データ">
       <div class="modal-actions">
-        <button class="btn btn-primary" onclick="saveToDatabase()">保存</button>
+        <button class="btn btn-primary" onclick="saveToDatabase()">ローカル保存</button>
         <button class="btn" onclick="closeSaveModal()">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- クラウド同期モーダル -->
+  <div id="cloud-sync-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>☁️ クラウド同期</h2>
+        <button class="modal-close" onclick="closeCloudSyncModal()" type="button">✕</button>
+      </div>
+
+      <div class="cloud-sync-section">
+        <div id="firebase-setup-section">
+          <h3>🔧 Firebase設定</h3>
+          <p class="help-text">Firebase Console から取得した設定情報を入力してください</p>
+
+          <div class="form-group">
+            <label>API Key *</label>
+            <input type="text" id="firebase-api-key" placeholder="AIzaSy...">
+          </div>
+          <div class="form-group">
+            <label>Project ID *</label>
+            <input type="text" id="firebase-project-id" placeholder="my-project-123">
+          </div>
+          <div class="form-group">
+            <label>App ID *</label>
+            <input type="text" id="firebase-app-id" placeholder="1:123456789:web:abc...">
+          </div>
+
+          <button class="btn btn-primary" onclick="initFirebase()" type="button">🔗 Firebase接続</button>
+          <p class="help-text">
+            ℹ️ Firebase Console (<a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a>) でプロジェクトを作成し、
+            プロジェクト設定 > アプリ > ウェブアプリ から設定情報を取得してください
+          </p>
+        </div>
+
+        <div id="firebase-sync-section" style="display:none;">
+          <h3>📱 デバイス間同期</h3>
+
+          <div class="sync-status">
+            <div class="status-indicator" id="sync-status">
+              <span class="status-dot"></span>
+              <span id="sync-status-text">未接続</span>
+            </div>
+          </div>
+
+          <div class="room-code-section">
+            <h4>新しいルームを作成</h4>
+            <button class="btn btn-success" onclick="createRoom()" type="button">
+              ➕ 新規ルーム作成（6桁コード生成）
+            </button>
+            <div id="created-room-code" class="room-code-display" style="display:none;">
+              <p>ルームコード:</p>
+              <div class="room-code-large" id="room-code-value"></div>
+              <p class="help-text">このコードを他のデバイスで入力してください</p>
+            </div>
+          </div>
+
+          <div class="room-join-section">
+            <h4>既存のルームに参加</h4>
+            <div class="form-group">
+              <label>ルームコード（6桁）</label>
+              <input type="text" id="room-code-input" placeholder="例: ABC123" maxlength="6" style="text-transform:uppercase;">
+            </div>
+            <button class="btn btn-primary" onclick="joinRoom()" type="button">🔗 ルームに参加</button>
+          </div>
+
+          <div class="sync-actions" id="sync-actions" style="display:none;">
+            <h4>同期操作</h4>
+            <button class="btn" onclick="uploadToCloud()" type="button">⬆️ クラウドにアップロード</button>
+            <button class="btn" onclick="downloadFromCloud()" type="button">⬇️ クラウドから取得</button>
+            <button class="btn" onclick="enableAutoSync()" type="button" id="auto-sync-btn">🔄 自動同期を有効化</button>
+            <button class="btn" onclick="leaveRoom()" type="button">🚪 ルームから退出</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn" onclick="closeCloudSyncModal()" type="button">閉じる</button>
       </div>
     </div>
   </div>
@@ -428,6 +509,11 @@
 
   <!-- ライブラリ -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 
   <!-- アプリケーションスクリプト -->
   <script type="module" src="js/app.js"></script>

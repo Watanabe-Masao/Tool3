@@ -14,6 +14,9 @@ import type {
   CellKeyComponents
 } from './types';
 
+// Firebase imports
+import * as FirebaseSync from './firebase';
+
 // Database constants
 const DB_NAME = 'VegetableOrderDB';
 const DB_VERSION = 3;
@@ -1702,3 +1705,25 @@ initDatabase().then(function() { renderSavedList(); }).catch(function(err) { con
 (window as any).exportTagTemplate = exportTagTemplate;
 (window as any).clearSelection = clearSelection;
 (window as any).toggleTagStats = toggleTagStats;
+
+// Firebase cloud sync functions
+(window as any).showCloudSyncModal = FirebaseSync.showCloudSyncModal;
+(window as any).closeCloudSyncModal = FirebaseSync.closeCloudSyncModal;
+(window as any).initFirebase = FirebaseSync.initFirebase;
+(window as any).createRoom = FirebaseSync.createRoom;
+(window as any).joinRoom = FirebaseSync.joinRoom;
+(window as any).uploadToCloud = FirebaseSync.uploadToCloud;
+(window as any).downloadFromCloud = FirebaseSync.downloadFromCloud;
+(window as any).enableAutoSync = FirebaseSync.enableAutoSync;
+(window as any).leaveRoom = FirebaseSync.leaveRoom;
+
+// Export data for Firebase sync
+(window as any).loadedFiles = loadedFiles;
+(window as any).rawData = rawData;
+(window as any).productInfo = productInfo;
+(window as any).productTags = productTags;
+(window as any).cellEdits = cellEdits;
+(window as any).mergeAllData = mergeAllData;
+(window as any).updateFileChips = updateFileChips;
+(window as any).initUI = initUI;
+(window as any).showToast = showToast;

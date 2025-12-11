@@ -1,3 +1,5 @@
+// Firebase imports
+import * as FirebaseSync from './firebase';
 // Database constants
 const DB_NAME = 'VegetableOrderDB';
 const DB_VERSION = 3;
@@ -1802,5 +1804,24 @@ window.exportTagStats = exportTagStats;
 window.exportTagTemplate = exportTagTemplate;
 window.clearSelection = clearSelection;
 window.toggleTagStats = toggleTagStats;
-export {};
+// Firebase cloud sync functions
+window.showCloudSyncModal = FirebaseSync.showCloudSyncModal;
+window.closeCloudSyncModal = FirebaseSync.closeCloudSyncModal;
+window.initFirebase = FirebaseSync.initFirebase;
+window.createRoom = FirebaseSync.createRoom;
+window.joinRoom = FirebaseSync.joinRoom;
+window.uploadToCloud = FirebaseSync.uploadToCloud;
+window.downloadFromCloud = FirebaseSync.downloadFromCloud;
+window.enableAutoSync = FirebaseSync.enableAutoSync;
+window.leaveRoom = FirebaseSync.leaveRoom;
+// Export data for Firebase sync
+window.loadedFiles = loadedFiles;
+window.rawData = rawData;
+window.productInfo = productInfo;
+window.productTags = productTags;
+window.cellEdits = cellEdits;
+window.mergeAllData = mergeAllData;
+window.updateFileChips = updateFileChips;
+window.initUI = initUI;
+window.showToast = showToast;
 //# sourceMappingURL=app.js.map
