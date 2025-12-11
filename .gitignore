@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build output (compiled from TypeScript)
+# Note: Keep js/app.js and js/app.js.map for GitHub Pages
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor directories
+.vscode/
+.idea/

@@ -1,0 +1,25 @@
+{
+  "name": "vegetable-order-system",
+  "version": "1.0.0",
+  "description": "野菜発注管理システム - Vegetable Order Management System",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "clean": "rm -rf js/app.js js/app.js.map",
+    "prebuild": "npm run clean"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/node": "^20.10.5"
+  },
+  "keywords": [
+    "vegetable",
+    "order",
+    "management",
+    "excel",
+    "indexeddb"
+  ],
+  "author": "Claude Code",
+  "license": "MIT"
+}
