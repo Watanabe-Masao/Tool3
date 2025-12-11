@@ -317,7 +317,19 @@
 
           <div class="sync-actions" id="sync-actions" style="display:none;">
             <h4>同期操作</h4>
-            <button class="btn" onclick="uploadToCloud()" type="button">⬆️ クラウドにアップロード</button>
+
+            <!-- ファイル選択セクション -->
+            <div class="upload-file-selector" id="upload-file-selector">
+              <p class="selector-label">アップロードするファイルを選択:</p>
+              <div class="file-checkbox-list" id="upload-file-list"></div>
+              <div class="selector-actions">
+                <button class="btn btn-sm" onclick="selectAllUploadFiles()" type="button">全選択</button>
+                <button class="btn btn-sm" onclick="clearAllUploadFiles()" type="button">全解除</button>
+              </div>
+            </div>
+
+            <button class="btn btn-primary" onclick="uploadSelectedFiles()" type="button">⬆️ 選択ファイルをアップロード</button>
+            <button class="btn" onclick="uploadToCloud()" type="button">⬆️ 全データをアップロード</button>
             <button class="btn" onclick="downloadFromCloud()" type="button">⬇️ クラウドから取得</button>
             <button class="btn" onclick="enableAutoSync()" type="button" id="auto-sync-btn">🔄 自動同期を有効化</button>
             <button class="btn" onclick="leaveRoom()" type="button">🚪 ルームから退出</button>
@@ -529,6 +541,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 
   <!-- アプリケーションスクリプト -->
-  <script type="module" src="js/app.js?v=20251211-7"></script>
+  <script type="module" src="js/app.js?v=20251211-8"></script>
 </body>
 </html>

@@ -1830,6 +1830,9 @@ window.uploadToCloud = FirebaseSync.uploadToCloud;
 window.downloadFromCloud = FirebaseSync.downloadFromCloud;
 window.enableAutoSync = FirebaseSync.enableAutoSync;
 window.leaveRoom = FirebaseSync.leaveRoom;
+window.selectAllUploadFiles = FirebaseSync.selectAllUploadFiles;
+window.clearAllUploadFiles = FirebaseSync.clearAllUploadFiles;
+window.uploadSelectedFiles = FirebaseSync.uploadSelectedFiles;
 // Export data for Firebase sync
 window.loadedFiles = loadedFiles;
 window.rawData = rawData;
