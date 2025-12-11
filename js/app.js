@@ -152,16 +152,30 @@ function editCell(product, date, currentVal, td) {
   td.appendChild(input);
   input.focus();
   input.select();
-  input.onblur = function() { saveCellEdit(product, date, input.value, td); };
+  input.onblur = function() { saveCellEdit(product, date, input.value, td, currentVal); };
   input.onkeydown = function(e) {
     if (e.key === 'Enter') { input.blur(); }
     if (e.key === 'Escape') { updateTable(); }
   };
 }
 
-function saveCellEdit(product, date, newVal, td) {
+function saveCellEdit(product, date, newVal, td, originalVal) {
   var qty = parseInt(newVal) || 0;
   var store = Array.from(selectedStores)[0];
+  var cellKey = product + '-' + date + '-' + store;
+
+  // 元の値と異なる場合のみ編集履歴に記録
+  if (qty !== originalVal) {
+    if (!cellEdits[cellKey]) {
+      cellEdits[cellKey] = { original: originalVal, edited: qty };
+    } else {
+      cellEdits[cellKey].edited = qty;
+    }
+  } else {
+    // 元の値に戻した場合は編集履歴から削除
+    delete cellEdits[cellKey];
+  }
+
   var found = false;
   rawData.data.forEach(function(d) {
     if (d.product === product && d.date === date && d.store === store) {
@@ -218,6 +232,9 @@ let selectedCols = new Set(), selectedRows = new Set();
 let isDraggingCol = false, isDraggingRow = false, dragStartCol = -1, dragStartRow = -1;
 let currentDates = [], currentProducts = [], currentPivot = {};
 let sliderFromIdx = 0, sliderToIdx = 0;
+let cellEdits = {}; // セル編集履歴: {product-date-store: {original: value, edited: value}}
+let selectedCells = new Set(); // セル範囲選択用
+let isDraggingCells = false, cellDragStart = null, cellDragTimer = null;
 
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
@@ -649,8 +666,19 @@ function updateTable() {
     if (showUnit) html += '<td class="info">'+(info.unit || '-')+'</td>';
     dates.forEach(function(d, ci) {
       const v = row[d] || 0;
+      const store = Array.from(selectedStores)[0];
+      const cellKey = p + '-' + d + '-' + store;
+      const isEdited = cellEdits[cellKey];
       var editAttr = canEdit ? ' onclick="editCell(\''+pEsc+'\', \''+d+'\', '+v+', this)"' : '';
-      html += '<td class="value '+(v > 0 ? 'has-value' : '')+' '+(v > 50 ? 'high' : v > 20 ? 'medium' : '')+(canEdit ? ' editable' : '')+'" data-row="'+ri+'" data-col="'+ci+'" data-date="'+d+'"'+editAttr+'>'+(v > 0 ? v : '-')+'</td>';
+      var cellClass = 'value';
+      if (v > 0) cellClass += ' has-value';
+      if (isEdited) cellClass += ' edited';
+      if (canEdit) cellClass += ' editable';
+      var cellContent = v > 0 ? v : '-';
+      if (isEdited) {
+        cellContent = v + '<span class="original-value">元: ' + isEdited.original + '</span>';
+      }
+      html += '<td class="'+cellClass+'" data-row="'+ri+'" data-col="'+ci+'" data-date="'+d+'"'+editAttr+'>'+cellContent+'</td>';
     });
     html += '<td class="total-cell">'+row.total+'</td>';
     html += '<td class="del-cell"><button class="del-row-btn" onclick="deleteProduct(\''+pEsc+'\')">✕</button></td></tr>';
@@ -675,13 +703,89 @@ function updateTable() {
 
 function setupSelection() {
   document.querySelectorAll('th.date-col').forEach(function(th) {
-    th.onmousedown = function(e) { e.preventDefault(); const c = parseInt(th.dataset.col); if (!e.ctrlKey && !e.metaKey) selectedCols.clear(); isDraggingCol = true; isDraggingRow = false; dragStartCol = c; toggleCol(c); applySelectionHighlight(); };
+    th.onmousedown = function(e) {
+      e.preventDefault();
+      const c = parseInt(th.dataset.col);
+      if (e.ctrlKey || e.metaKey) {
+        // Ctrlキーで複数選択
+        toggleCol(c);
+      } else {
+        // 通常クリックは選択を外さない（トグルのみ）
+        if (!selectedCols.has(c)) {
+          isDraggingCol = true;
+          isDraggingRow = false;
+          dragStartCol = c;
+        }
+        toggleCol(c);
+      }
+      applySelectionHighlight();
+    };
     th.onmouseenter = function() { if (isDraggingCol) { const c = parseInt(th.dataset.col); for (var i = Math.min(dragStartCol, c); i <= Math.max(dragStartCol, c); i++) selectedCols.add(i); applySelectionHighlight(); } };
   });
   document.querySelectorAll('td.product').forEach(function(td) {
     if (td.closest('.total-row')) return;
-    td.onmousedown = function(e) { e.preventDefault(); const r = parseInt(td.dataset.row); if (!e.ctrlKey && !e.metaKey) selectedRows.clear(); isDraggingRow = true; isDraggingCol = false; dragStartRow = r; toggleRow(r); applySelectionHighlight(); };
+    td.onmousedown = function(e) {
+      e.preventDefault();
+      const r = parseInt(td.dataset.row);
+      if (e.ctrlKey || e.metaKey) {
+        // Ctrlキーで複数選択
+        toggleRow(r);
+      } else {
+        // 通常クリックは選択を外さない（トグルのみ）
+        if (!selectedRows.has(r)) {
+          isDraggingRow = true;
+          isDraggingCol = false;
+          dragStartRow = r;
+        }
+        toggleRow(r);
+      }
+      applySelectionHighlight();
+    };
     td.onmouseenter = function() { if (isDraggingRow) { const r = parseInt(td.dataset.row); for (var i = Math.min(dragStartRow, r); i <= Math.max(dragStartRow, r); i++) selectedRows.add(i); applySelectionHighlight(); } };
+  });
+
+  // セル範囲選択機能
+  document.querySelectorAll('td.value').forEach(function(td) {
+    td.onmousedown = function(e) {
+      if (e.target.tagName === 'INPUT') return; // 編集中は無視
+      if (e.button !== 0) return; // 左クリックのみ
+
+      cellDragTimer = setTimeout(function() {
+        isDraggingCells = true;
+        selectedCells.clear();
+        cellDragStart = { row: parseInt(td.dataset.row), col: parseInt(td.dataset.col) };
+        const cellKey = td.dataset.row + '-' + td.dataset.col;
+        selectedCells.add(cellKey);
+        applyCellSelection();
+      }, 300); // 300ms長押し
+    };
+
+    td.onmouseenter = function(e) {
+      if (isDraggingCells && cellDragStart) {
+        const currentRow = parseInt(td.dataset.row);
+        const currentCol = parseInt(td.dataset.col);
+        selectedCells.clear();
+
+        const minRow = Math.min(cellDragStart.row, currentRow);
+        const maxRow = Math.max(cellDragStart.row, currentRow);
+        const minCol = Math.min(cellDragStart.col, currentCol);
+        const maxCol = Math.max(cellDragStart.col, currentCol);
+
+        for (var r = minRow; r <= maxRow; r++) {
+          for (var c = minCol; c <= maxCol; c++) {
+            selectedCells.add(r + '-' + c);
+          }
+        }
+        applyCellSelection();
+      }
+    };
+
+    td.onmouseup = function(e) {
+      if (cellDragTimer) {
+        clearTimeout(cellDragTimer);
+        cellDragTimer = null;
+      }
+    };
   });
 }
 
@@ -726,12 +830,19 @@ document.addEventListener('mouseup', function() {
   }
 });
 
-document.getElementById('table-scroll').onmouseup = function() { isDraggingCol = isDraggingRow = false; };
-document.onmousemove = function(e) { if (hasSelection() && !e.target.closest('.date-slider-track')) updateTooltip(e); };
+document.getElementById('table-scroll').onmouseup = function() { isDraggingCol = isDraggingRow = isDraggingCells = false; if (cellDragTimer) { clearTimeout(cellDragTimer); cellDragTimer = null; } };
+document.onmousemove = function(e) { if ((hasSelection() || selectedCells.size > 0) && !e.target.closest('.date-slider-track')) updateTooltip(e); };
 
 function toggleCol(c) { selectedCols.has(c) ? selectedCols.delete(c) : selectedCols.add(c); }
 function toggleRow(r) { selectedRows.has(r) ? selectedRows.delete(r) : selectedRows.add(r); }
 function hasSelection() { return selectedCols.size > 0 || selectedRows.size > 0; }
+
+function applyCellSelection() {
+  document.querySelectorAll('td.value').forEach(function(td) {
+    const cellKey = td.dataset.row + '-' + td.dataset.col;
+    td.classList.toggle('cell-selected', selectedCells.has(cellKey));
+  });
+}
 
 function applySelectionHighlight() {
   document.querySelectorAll('th.date-col').forEach(function(th) { th.classList.toggle('selected', selectedCols.has(parseInt(th.dataset.col))); });
@@ -753,26 +864,55 @@ function applySelectionHighlight() {
 }
 
 function updateTooltip(e) {
-  if (!hasSelection()) { tooltip.classList.remove('show'); return; }
-  const cols = selectedCols.size > 0 ? Array.from(selectedCols) : currentDates.map(function(_, i) { return i; });
-  const rows = selectedRows.size > 0 ? Array.from(selectedRows) : currentProducts.map(function(_, i) { return i; });
+  if (!hasSelection() && selectedCells.size === 0) { tooltip.classList.remove('show'); return; }
+
   var tQty = 0, tCost = 0, tPrice = 0;
-  rows.forEach(function(ri) {
-    const p = currentProducts[ri]; if (!p) return;
-    const info = productInfo[p] || {};
-    cols.forEach(function(ci) {
-      const d = currentDates[ci]; if (!d) return;
+  var hdr, sub, dateStrs, prodNames;
+
+  // セル範囲選択がある場合
+  if (selectedCells.size > 0) {
+    hdr = '📋 セル範囲集計';
+    var cellRows = new Set(), cellCols = new Set();
+    selectedCells.forEach(function(cellKey) {
+      const parts = cellKey.split('-');
+      const ri = parseInt(parts[0]);
+      const ci = parseInt(parts[1]);
+      cellRows.add(ri);
+      cellCols.add(ci);
+      const p = currentProducts[ri];
+      const d = currentDates[ci];
+      if (!p || !d) return;
+      const info = productInfo[p] || {};
       const q = currentPivot[p] ? (currentPivot[p][d] || 0) : 0;
       tQty += q;
       if (info.cost) tCost += q * info.cost;
       if (info.price) tPrice += q * info.price;
     });
-  });
+    dateStrs = Array.from(cellCols).sort(function(a,b){return a-b;}).map(function(c) { return currentDates[c]; }).filter(Boolean);
+    prodNames = Array.from(cellRows).sort(function(a,b){return a-b;}).map(function(r) { return currentProducts[r]; }).filter(Boolean);
+    sub = (dateStrs[0]||'')+'〜'+(dateStrs[dateStrs.length-1]||'')+' / '+cellRows.size+'品目 × '+cellCols.size+'日';
+  } else {
+    // 通常の行・列選択
+    const cols = selectedCols.size > 0 ? Array.from(selectedCols) : currentDates.map(function(_, i) { return i; });
+    const rows = selectedRows.size > 0 ? Array.from(selectedRows) : currentProducts.map(function(_, i) { return i; });
+    rows.forEach(function(ri) {
+      const p = currentProducts[ri]; if (!p) return;
+      const info = productInfo[p] || {};
+      cols.forEach(function(ci) {
+        const d = currentDates[ci]; if (!d) return;
+        const q = currentPivot[p] ? (currentPivot[p][d] || 0) : 0;
+        tQty += q;
+        if (info.cost) tCost += q * info.cost;
+        if (info.price) tPrice += q * info.price;
+      });
+    });
+    hdr = selectedCols.size > 0 && selectedRows.size > 0 ? '📊 交点集計' : selectedCols.size > 0 ? '📅 期間集計' : '📦 品目集計';
+    dateStrs = (selectedCols.size > 0 ? Array.from(selectedCols).sort(function(a,b){return a-b;}).map(function(c) { return currentDates[c]; }) : currentDates).filter(Boolean);
+    prodNames = (selectedRows.size > 0 ? Array.from(selectedRows).sort(function(a,b){return a-b;}).map(function(r) { return currentProducts[r]; }) : currentProducts).filter(Boolean);
+    sub = (dateStrs[0]||'')+'〜'+(dateStrs[dateStrs.length-1]||'')+' / '+(prodNames.length <= 2 ? prodNames.join(', ') : prodNames[0] + ' 他' + (prodNames.length-1) + '件');
+  }
+
   const margin = tPrice > 0 ? ((tPrice - tCost) / tPrice * 100).toFixed(1) : 0;
-  var hdr = selectedCols.size > 0 && selectedRows.size > 0 ? '📊 交点集計' : selectedCols.size > 0 ? '📅 期間集計' : '📦 品目集計';
-  const dateStrs = (selectedCols.size > 0 ? Array.from(selectedCols).sort(function(a,b){return a-b;}).map(function(c) { return currentDates[c]; }) : currentDates).filter(Boolean);
-  const prodNames = (selectedRows.size > 0 ? Array.from(selectedRows).sort(function(a,b){return a-b;}).map(function(r) { return currentProducts[r]; }) : currentProducts).filter(Boolean);
-  const sub = (dateStrs[0]||'')+'〜'+(dateStrs[dateStrs.length-1]||'')+' / '+(prodNames.length <= 2 ? prodNames.join(', ') : prodNames[0] + ' 他' + (prodNames.length-1) + '件');
   document.getElementById('tooltip-header').textContent = hdr;
   document.getElementById('tooltip-sub').textContent = sub;
   document.getElementById('tooltip-qty').textContent = tQty.toLocaleString();
@@ -787,7 +927,7 @@ function updateTooltip(e) {
   tooltip.classList.add('show');
 }
 
-function clearSelection() { selectedCols.clear(); selectedRows.clear(); applySelectionHighlight(); tooltip.classList.remove('show'); }
+function clearSelection() { selectedCols.clear(); selectedRows.clear(); selectedCells.clear(); applySelectionHighlight(); applyCellSelection(); tooltip.classList.remove('show'); }
 
 function printTable() {
   const dates = getFilteredDates();
