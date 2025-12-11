@@ -466,7 +466,7 @@ export async function uploadSelectedFiles() {
                 dataToUpload.rawData[fileName] = rawData[fileName];
             }
         });
-        // 選択されたファイルに含まれる商品の情報のみをコピー
+        // 選択されたファイルに含まれる商品の情報をコピー
         const selectedProducts = new Set();
         selectedFiles.forEach(fileName => {
             const fileData = rawData[fileName] || [];
@@ -476,16 +476,34 @@ export async function uploadSelectedFiles() {
                 }
             });
         });
+        // 手動追加された商品（どのファイルにも含まれない商品）も含める
+        const allFileProducts = new Set();
+        Object.values(rawData).forEach(fileData => {
+            (fileData || []).forEach(row => {
+                if (row['商品名']) {
+                    allFileProducts.add(row['商品名']);
+                }
+            });
+        });
+        // productInfoにあるがどのファイルにも含まれない商品 = 手動追加商品
+        Object.keys(productInfo).forEach(productName => {
+            if (!allFileProducts.has(productName)) {
+                selectedProducts.add(productName);  // 手動追加商品を含める
+            }
+        });
         selectedProducts.forEach(productName => {
             if (productInfo[productName]) {
                 dataToUpload.productInfo[productName] = productInfo[productName];
             }
         });
-        // セル編集も選択されたファイルに関連するもののみ
+        // セル編集も選択されたファイルに関連するものと、手動追加分を含める
         Object.keys(cellEdits).forEach(key => {
             const parts = key.split('_');
             const fileName = parts.slice(0, -2).join('_');
-            if (selectedFiles.includes(fileName) || selectedFiles.some(f => key.includes(f))) {
+            // 選択ファイルに関連 OR どのファイルにも関連しない（手動編集）
+            const isRelatedToSelectedFile = selectedFiles.includes(fileName) || selectedFiles.some(f => key.includes(f));
+            const isManualEdit = !Object.keys(rawData).some(f => key.includes(f));
+            if (isRelatedToSelectedFile || isManualEdit) {
                 dataToUpload.cellEdits[key] = cellEdits[key];
             }
         });
