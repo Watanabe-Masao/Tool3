@@ -1,5 +1,5 @@
 // Firebase imports
-import * as FirebaseSync from './firebase';
+import * as FirebaseSync from './firebase.js';
 // Database constants
 const DB_NAME = 'VegetableOrderDB';
 const DB_VERSION = 3;
