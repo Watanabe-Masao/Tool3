@@ -235,52 +235,82 @@
 
   <!-- 商品追加モーダル -->
   <div id="add-product-modal" class="modal">
-    <div class="modal-content">
-      <h2>➕ 商品を追加</h2>
-      <div class="form-grid">
-        <div class="form-group">
-          <label>品目名 *</label>
-          <input type="text" id="add-product-name" placeholder="例: キャベツ L">
+    <div class="modal-content modal-wide">
+      <div class="modal-header">
+        <h2>🆕 新商品を追加</h2>
+        <button class="modal-close" onclick="closeAddProductModal()">✕</button>
+      </div>
+
+      <!-- 商品基本情報 -->
+      <div class="product-info-section">
+        <div class="form-row">
+          <div class="form-group form-group-wide">
+            <label>品目名 *</label>
+            <input type="text" id="add-product-name" placeholder="例: キャベツ L" autocomplete="off">
+          </div>
         </div>
-        <div class="form-group">
-          <label>原価</label>
-          <input type="number" id="add-product-cost" placeholder="100">
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>原価</label>
+            <input type="number" id="add-product-cost" placeholder="100" min="0">
+          </div>
+          <div class="form-group">
+            <label>売価</label>
+            <input type="number" id="add-product-price" placeholder="150" min="0">
+          </div>
+          <div class="form-group">
+            <label>入数</label>
+            <input type="number" id="add-product-unit" placeholder="10" min="0">
+          </div>
         </div>
-        <div class="form-group">
-          <label>売価</label>
-          <input type="number" id="add-product-price" placeholder="150">
-        </div>
-        <div class="form-group">
-          <label>入数</label>
-          <input type="number" id="add-product-unit" placeholder="10">
-        </div>
-        <div class="form-group">
-          <label>#大分類</label>
-          <input type="text" id="add-product-tag1" list="tag1-list" placeholder="野菜">
-          <datalist id="tag1-list"></datalist>
-        </div>
-        <div class="form-group">
-          <label>#中分類</label>
-          <input type="text" id="add-product-tag2" list="tag2-list" placeholder="葉物">
-          <datalist id="tag2-list"></datalist>
-        </div>
-        <div class="form-group">
-          <label>#小分類</label>
-          <input type="text" id="add-product-tag3" list="tag3-list" placeholder="キャベツ">
-          <datalist id="tag3-list"></datalist>
-        </div>
-        <div class="form-group">
-          <label>日付</label>
-          <select id="add-product-date"></select>
-        </div>
-        <div class="form-group">
-          <label>数量</label>
-          <input type="number" id="add-product-qty" placeholder="0">
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>#大分類</label>
+            <input type="text" id="add-product-tag1" list="tag1-list" placeholder="野菜" autocomplete="off">
+            <datalist id="tag1-list"></datalist>
+          </div>
+          <div class="form-group">
+            <label>#中分類</label>
+            <input type="text" id="add-product-tag2" list="tag2-list" placeholder="葉物" autocomplete="off">
+            <datalist id="tag2-list"></datalist>
+          </div>
+          <div class="form-group">
+            <label>#小分類</label>
+            <input type="text" id="add-product-tag3" list="tag3-list" placeholder="キャベツ" autocomplete="off">
+            <datalist id="tag3-list"></datalist>
+          </div>
         </div>
       </div>
+
+      <!-- カレンダーセクション -->
+      <div class="calendar-section">
+        <div class="calendar-header">
+          <button class="calendar-nav-btn" onclick="prevMonth()" type="button">◀</button>
+          <h3 id="calendar-month-year"></h3>
+          <button class="calendar-nav-btn" onclick="nextMonth()" type="button">▶</button>
+        </div>
+
+        <div class="calendar-grid">
+          <div class="calendar-weekday">日</div>
+          <div class="calendar-weekday">月</div>
+          <div class="calendar-weekday">火</div>
+          <div class="calendar-weekday">水</div>
+          <div class="calendar-weekday">木</div>
+          <div class="calendar-weekday">金</div>
+          <div class="calendar-weekday">土</div>
+        </div>
+        <div id="calendar-days" class="calendar-days-grid"></div>
+
+        <div class="calendar-help">
+          💡 ヒント: 数量を入力した日付のみ保存されます。Enterキーで次のセルに移動します。
+        </div>
+      </div>
+
       <div class="modal-actions">
-        <button class="btn btn-primary" onclick="addProduct()">追加</button>
-        <button class="btn" onclick="closeAddProductModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="addProductWithCalendar()" type="button">📝 まとめて追加</button>
+        <button class="btn" onclick="closeAddProductModal()" type="button">キャンセル</button>
       </div>
     </div>
   </div>

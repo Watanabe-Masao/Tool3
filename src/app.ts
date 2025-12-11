@@ -159,25 +159,272 @@ function showSaveModal() {
 function closeSaveModal() { document.getElementById('save-modal')!.classList.remove('show'); }
 
 function showAddProductModal() {
-  document.getElementById('add-product-name').value = '';
-  document.getElementById('add-product-cost').value = '';
-  document.getElementById('add-product-price').value = '';
-  document.getElementById('add-product-unit').value = '';
-  document.getElementById('add-product-tag1').value = '';
-  document.getElementById('add-product-tag2').value = '';
-  document.getElementById('add-product-tag3').value = '';
-  document.getElementById('add-product-qty').value = '';
+  (document.getElementById('add-product-name') as HTMLInputElement).value = '';
+  (document.getElementById('add-product-cost') as HTMLInputElement).value = '';
+  (document.getElementById('add-product-price') as HTMLInputElement).value = '';
+  (document.getElementById('add-product-unit') as HTMLInputElement).value = '';
+  (document.getElementById('add-product-tag1') as HTMLInputElement).value = '';
+  (document.getElementById('add-product-tag2') as HTMLInputElement).value = '';
+  (document.getElementById('add-product-tag3') as HTMLInputElement).value = '';
   updateTagDatalist();
-  var dateSelect = document.getElementById('add-product-date');
-  dateSelect.innerHTML = '<option value="">（なし）</option>';
-  currentDates.forEach(function(d) {
-    dateSelect.innerHTML += '<option value="' + d + '">' + d + '</option>';
-  });
-  document.getElementById('add-product-modal').classList.add('show');
-  document.getElementById('add-product-name').focus();
+
+  // Initialize calendar to current month or first available date
+  const today = new Date();
+  if (currentDates.length > 0) {
+    const firstDate = new Date(currentDates[0]);
+    calendarYear = firstDate.getFullYear();
+    calendarMonth = firstDate.getMonth();
+  } else {
+    calendarYear = today.getFullYear();
+    calendarMonth = today.getMonth();
+  }
+
+  calendarQuantities = {};
+  renderCalendar();
+
+  document.getElementById('add-product-modal')!.classList.add('show');
+  (document.getElementById('add-product-name') as HTMLInputElement).focus();
 }
 
-function closeAddProductModal() { document.getElementById('add-product-modal').classList.remove('show'); }
+function closeAddProductModal() {
+  document.getElementById('add-product-modal')!.classList.remove('show');
+  calendarQuantities = {};
+}
+
+/**
+ * Render calendar for add product modal
+ */
+function renderCalendar() {
+  const monthYear = document.getElementById('calendar-month-year')!;
+  const daysContainer = document.getElementById('calendar-days')!;
+
+  // Month/year header
+  const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+  monthYear.textContent = `${calendarYear}年 ${monthNames[calendarMonth]}`;
+
+  // Get first day of month and total days
+  const firstDay = new Date(calendarYear, calendarMonth, 1);
+  const lastDay = new Date(calendarYear, calendarMonth + 1, 0);
+  const daysInMonth = lastDay.getDate();
+  const startDayOfWeek = firstDay.getDay(); // 0 = Sunday
+
+  // Get previous month's last days
+  const prevMonthLastDay = new Date(calendarYear, calendarMonth, 0);
+  const prevMonthDays = prevMonthLastDay.getDate();
+
+  // Today for highlighting
+  const today = new Date();
+  const todayStr = formatDate(today);
+
+  daysContainer.innerHTML = '';
+
+  // Previous month's trailing days
+  for (let i = startDayOfWeek - 1; i >= 0; i--) {
+    const day = prevMonthDays - i;
+    const cell = createCalendarDayCell(day, true, -1);
+    daysContainer.appendChild(cell);
+  }
+
+  // Current month days
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(calendarYear, calendarMonth, day);
+    const dateStr = formatDate(date);
+    const dayOfWeek = date.getDay();
+    const isToday = dateStr === todayStr;
+    const cell = createCalendarDayCell(day, false, dayOfWeek, dateStr, isToday);
+    daysContainer.appendChild(cell);
+  }
+
+  // Next month's leading days
+  const totalCells = daysContainer.children.length;
+  const remainingCells = 42 - totalCells; // 6 rows * 7 days
+  for (let day = 1; day <= remainingCells && day <= 14; day++) {
+    const cell = createCalendarDayCell(day, true, 1);
+    daysContainer.appendChild(cell);
+  }
+}
+
+/**
+ * Format date as YYYY/MM/DD
+ */
+function formatDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}/${month}/${day}`;
+}
+
+/**
+ * Create a single calendar day cell
+ */
+function createCalendarDayCell(
+  day: number,
+  isOtherMonth: boolean,
+  dayOfWeek: number,
+  dateStr?: string,
+  isToday?: boolean
+): HTMLDivElement {
+  const cell = document.createElement('div');
+  cell.className = 'calendar-day';
+
+  if (isOtherMonth) {
+    cell.classList.add('other-month');
+  }
+
+  if (isToday) {
+    cell.classList.add('today');
+  }
+
+  if (dayOfWeek === 0) {
+    cell.classList.add('sunday');
+  } else if (dayOfWeek === 6) {
+    cell.classList.add('saturday');
+  }
+
+  // Day number
+  const dayNumber = document.createElement('div');
+  dayNumber.className = 'calendar-day-number';
+  dayNumber.textContent = String(day);
+  cell.appendChild(dayNumber);
+
+  // Quantity input (only for current month)
+  if (!isOtherMonth && dateStr) {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.className = 'calendar-day-input';
+    input.placeholder = '-';
+    input.min = '0';
+    input.step = '1';
+    input.dataset.date = dateStr;
+
+    // Restore value if exists
+    if (calendarQuantities[dateStr]) {
+      input.value = String(calendarQuantities[dateStr]);
+    }
+
+    // Save on input
+    input.addEventListener('input', function() {
+      const qty = parseInt(input.value);
+      if (qty > 0) {
+        calendarQuantities[dateStr] = qty;
+      } else {
+        delete calendarQuantities[dateStr];
+      }
+    });
+
+    // Enter key moves to next cell
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const allInputs = Array.from(document.querySelectorAll('.calendar-day-input:not([disabled])')) as HTMLInputElement[];
+        const currentIndex = allInputs.indexOf(input);
+        if (currentIndex >= 0 && currentIndex < allInputs.length - 1) {
+          allInputs[currentIndex + 1].focus();
+          allInputs[currentIndex + 1].select();
+        }
+      }
+    });
+
+    cell.appendChild(input);
+  }
+
+  return cell;
+}
+
+/**
+ * Navigate to previous month
+ */
+function prevMonth() {
+  calendarMonth--;
+  if (calendarMonth < 0) {
+    calendarMonth = 11;
+    calendarYear--;
+  }
+  renderCalendar();
+}
+
+/**
+ * Navigate to next month
+ */
+function nextMonth() {
+  calendarMonth++;
+  if (calendarMonth > 11) {
+    calendarMonth = 0;
+    calendarYear++;
+  }
+  renderCalendar();
+}
+
+/**
+ * Add product with calendar quantities
+ */
+function addProductWithCalendar() {
+  const name = (document.getElementById('add-product-name') as HTMLInputElement).value.trim();
+  if (!name) {
+    showToast('❌ 品目名を入力してください');
+    return;
+  }
+
+  if (allProducts.indexOf(name) >= 0) {
+    showToast('❌ 同名の商品が既に存在します');
+    return;
+  }
+
+  const cost = parseInt((document.getElementById('add-product-cost') as HTMLInputElement).value) || null;
+  const price = parseInt((document.getElementById('add-product-price') as HTMLInputElement).value) || null;
+  const unit = parseInt((document.getElementById('add-product-unit') as HTMLInputElement).value) || null;
+  const tag1 = (document.getElementById('add-product-tag1') as HTMLInputElement).value.trim();
+  const tag2 = (document.getElementById('add-product-tag2') as HTMLInputElement).value.trim();
+  const tag3 = (document.getElementById('add-product-tag3') as HTMLInputElement).value.trim();
+
+  // Check if any quantities were entered
+  const quantityCount = Object.keys(calendarQuantities).length;
+  if (quantityCount === 0) {
+    if (!confirm('数量が入力されていませんが、商品情報のみ追加しますか？')) {
+      return;
+    }
+  }
+
+  // Add to products list
+  allProducts.push(name);
+  allProducts.sort();
+
+  // Save product info
+  productInfo[name] = { cost: cost, price: price, unit: unit };
+
+  // Save tags
+  if (tag1 || tag2 || tag3) {
+    productTags[name] = {};
+    if (tag1) productTags[name].tag1 = tag1;
+    if (tag2) productTags[name].tag2 = tag2;
+    if (tag3) productTags[name].tag3 = tag3;
+  }
+
+  // Add data entries for each date with quantity
+  if (quantityCount > 0 && loadedFiles.length > 0) {
+    const store = rawData.stores[0] || '手動追加';
+    const supplier = rawData.suppliers[0] || '手動追加';
+    const fileName = loadedFiles[0].name;
+
+    Object.keys(calendarQuantities).forEach(function(date) {
+      const qty = calendarQuantities[date];
+      if (qty > 0) {
+        rawData.data.push({
+          product: name,
+          date: date,
+          quantity: qty,
+          store: store,
+          supplier: supplier,
+          fileName: fileName
+        });
+      }
+    });
+  }
+
+  closeAddProductModal();
+  showToast(`✅ 商品を追加しました（${quantityCount}日分のデータ）`);
+  updateTable();
+}
 
 function updateTagDatalist() {
   var tag1Set = new Set(), tag2Set = new Set(), tag3Set = new Set();
@@ -443,6 +690,13 @@ let cellDragStart: CellDragPosition | null = null;
 
 /** Cell drag timer ID */
 let cellDragTimer: number | null = null;
+
+/** Calendar current year and month for add product modal */
+let calendarYear: number = new Date().getFullYear();
+let calendarMonth: number = new Date().getMonth(); // 0-11
+
+/** Calendar quantity inputs: {date: quantity} */
+let calendarQuantities: Record<string, number> = {};
 
 // DOM elements
 const dropZone = document.getElementById('drop-zone') as HTMLElement;
@@ -1359,6 +1613,9 @@ initDatabase().then(function() { renderSavedList(); }).catch(function(err) { con
 (window as any).showAddProductModal = showAddProductModal;
 (window as any).closeAddProductModal = closeAddProductModal;
 (window as any).addProduct = addProduct;
+(window as any).addProductWithCalendar = addProductWithCalendar;
+(window as any).prevMonth = prevMonth;
+(window as any).nextMonth = nextMonth;
 (window as any).deleteProduct = deleteProduct;
 (window as any).editCell = editCell;
 (window as any).toggleFullscreen = toggleFullscreen;

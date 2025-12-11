@@ -1176,6 +1176,250 @@ body {
   justify-content: flex-end;
 }
 
+/* ========== ワイドモーダル ========== */
+.modal-wide {
+  max-width: 800px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e5e7;
+}
+
+.modal-header h2 {
+  margin: 0;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: #86868b;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.modal-close:hover {
+  background: #f5f5f7;
+  color: #1d1d1f;
+}
+
+/* ========== 商品情報セクション ========== */
+.product-info-section {
+  background: #f5f5f7;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.form-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.form-row:last-child {
+  margin-bottom: 0;
+}
+
+.form-group {
+  flex: 1;
+  min-width: 0;
+}
+
+.form-group-wide {
+  flex: 1 1 100%;
+}
+
+.form-group label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #1d1d1f;
+  margin-bottom: 4px;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #d2d2d7;
+  border-radius: 6px;
+  font-size: 12px;
+  background: white;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #007AFF;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+}
+
+/* ========== カレンダーセクション ========== */
+.calendar-section {
+  background: white;
+  border: 1px solid #e5e5e7;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 8px;
+  background: #f5f5f7;
+  border-radius: 6px;
+}
+
+.calendar-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1d1d1f;
+}
+
+.calendar-nav-btn {
+  background: white;
+  border: 1px solid #d2d2d7;
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #007AFF;
+  transition: all 0.2s;
+}
+
+.calendar-nav-btn:hover {
+  background: #007AFF;
+  color: white;
+  border-color: #007AFF;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.calendar-weekday {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #86868b;
+  padding: 6px 4px;
+  background: #f5f5f7;
+  border-radius: 4px;
+}
+
+.calendar-weekday:first-child {
+  color: #FF3B30;
+}
+
+.calendar-weekday:last-child {
+  color: #007AFF;
+}
+
+.calendar-days-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.calendar-day {
+  position: relative;
+  aspect-ratio: 1;
+  border: 1px solid #e5e5e7;
+  border-radius: 6px;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  transition: all 0.2s;
+}
+
+.calendar-day.other-month {
+  background: #f5f5f7;
+  opacity: 0.5;
+}
+
+.calendar-day.today {
+  border-color: #007AFF;
+  border-width: 2px;
+  background: #e8f4ff;
+}
+
+.calendar-day.has-data {
+  background: #fff3e0;
+  border-color: #FF9500;
+}
+
+.calendar-day.sunday {
+  color: #FF3B30;
+}
+
+.calendar-day.saturday {
+  color: #007AFF;
+}
+
+.calendar-day-number {
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 2px;
+  color: inherit;
+}
+
+.calendar-day-input {
+  width: 100%;
+  border: 1px solid #d2d2d7;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 11px;
+  text-align: center;
+  background: white;
+  transition: all 0.2s;
+}
+
+.calendar-day-input:focus {
+  outline: none;
+  border-color: #007AFF;
+  background: #e8f4ff;
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2);
+}
+
+.calendar-day-input:not(:placeholder-shown) {
+  background: #34C759;
+  color: white;
+  border-color: #34C759;
+  font-weight: 600;
+}
+
+.calendar-day.other-month .calendar-day-input {
+  pointer-events: none;
+  opacity: 0.3;
+}
+
+.calendar-help {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #e8f4ff;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #007AFF;
+  text-align: center;
+}
+
 /* ========== 選択ツールチップ ========== */
 .selection-tooltip {
   position: fixed;
