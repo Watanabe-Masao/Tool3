@@ -1710,6 +1710,7 @@ initDatabase().then(function() { renderSavedList(); }).catch(function(err) { con
 (window as any).showCloudSyncModal = FirebaseSync.showCloudSyncModal;
 (window as any).closeCloudSyncModal = FirebaseSync.closeCloudSyncModal;
 (window as any).initFirebase = FirebaseSync.initFirebase;
+(window as any).autoInitFirebase = FirebaseSync.autoInitFirebase;
 (window as any).createRoom = FirebaseSync.createRoom;
 (window as any).joinRoom = FirebaseSync.joinRoom;
 (window as any).uploadToCloud = FirebaseSync.uploadToCloud;

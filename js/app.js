@@ -1808,6 +1808,7 @@ window.toggleTagStats = toggleTagStats;
 window.showCloudSyncModal = FirebaseSync.showCloudSyncModal;
 window.closeCloudSyncModal = FirebaseSync.closeCloudSyncModal;
 window.initFirebase = FirebaseSync.initFirebase;
+window.autoInitFirebase = FirebaseSync.autoInitFirebase;
 window.createRoom = FirebaseSync.createRoom;
 window.joinRoom = FirebaseSync.joinRoom;
 window.uploadToCloud = FirebaseSync.uploadToCloud;

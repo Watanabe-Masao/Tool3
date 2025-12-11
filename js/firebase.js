@@ -2,6 +2,15 @@
  * Firebase Cloud Sync Module
  * PC とスマートフォン間でデータを同期
  */
+// デフォルト Firebase 設定
+const DEFAULT_FIREBASE_CONFIG = {
+    apiKey: "AIzaSyA4PedGVzxuVlAaJ6tSfouh42ZMaus0Gjo",
+    authDomain: "vegetable-order-a823e.firebaseapp.com",
+    projectId: "vegetable-order-a823e",
+    storageBucket: "vegetable-order-a823e.firebasestorage.app",
+    messagingSenderId: "241586853280",
+    appId: "1:241586853280:web:d4b03f83206bfcbedb40c5"
+};
 // Firebase インスタンス
 let firebaseApp = null;
 let firestore = null;
@@ -25,10 +34,35 @@ export function initFirebase() {
             apiKey: apiKey,
             authDomain: `${projectId}.firebaseapp.com`,
             projectId: projectId,
-            storageBucket: `${projectId}.appspot.com`,
+            storageBucket: `${projectId}.firebasestorage.app`,
             messagingSenderId: appId.split(':')[1],
             appId: appId
         };
+        initializeFirebaseWithConfig(firebaseConfig);
+    }
+    catch (error) {
+        console.error('Firebase init error:', error);
+        alert('❌ Firebase初期化エラー: ' + error.message);
+    }
+}
+/**
+ * デフォルト設定でFirebaseを自動初期化
+ */
+export function autoInitFirebase() {
+    // 既に初期化済みの場合はスキップ
+    if (firebaseApp) {
+        return;
+    }
+    // localStorageに保存された設定を優先
+    const savedConfig = localStorage.getItem('firebaseConfig');
+    const config = savedConfig ? JSON.parse(savedConfig) : DEFAULT_FIREBASE_CONFIG;
+    initializeFirebaseWithConfig(config);
+}
+/**
+ * Firebase設定で初期化（共通処理）
+ */
+function initializeFirebaseWithConfig(firebaseConfig) {
+    try {
         // Firebase初期化
         if (!firebaseApp) {
             firebaseApp = firebase.initializeApp(firebaseConfig);
@@ -45,6 +79,14 @@ export function initFirebase() {
             document.getElementById('firebase-setup-section').style.display = 'none';
             document.getElementById('firebase-sync-section').style.display = 'block';
             updateSyncStatus('接続済み', true);
+            // 保存されたルームコードがあれば自動参加
+            const savedRoomCode = localStorage.getItem('currentRoomCode');
+            if (savedRoomCode) {
+                currentRoomCode = savedRoomCode;
+                document.getElementById('room-code-input').value = savedRoomCode;
+                document.getElementById('sync-actions').style.display = 'block';
+                updateSyncStatus(`ルーム: ${savedRoomCode}`, true);
+            }
         })
             .catch((error) => {
             console.error('Firebase auth error:', error);
@@ -269,13 +311,15 @@ function getDeviceId() {
  * クラウド同期モーダルを表示
  */
 export function showCloudSyncModal() {
-    // 保存された設定を復元
+    // デフォルト設定を入力欄に表示
     const savedConfig = localStorage.getItem('firebaseConfig');
-    if (savedConfig) {
-        const config = JSON.parse(savedConfig);
-        document.getElementById('firebase-api-key').value = config.apiKey || '';
-        document.getElementById('firebase-project-id').value = config.projectId || '';
-        document.getElementById('firebase-app-id').value = config.appId || '';
+    const config = savedConfig ? JSON.parse(savedConfig) : DEFAULT_FIREBASE_CONFIG;
+    document.getElementById('firebase-api-key').value = config.apiKey || '';
+    document.getElementById('firebase-project-id').value = config.projectId || '';
+    document.getElementById('firebase-app-id').value = config.appId || '';
+    // Firebase未初期化の場合は自動接続
+    if (!firebaseApp) {
+        autoInitFirebase();
     }
     // 保存されたルームコードを復元
     const savedRoomCode = localStorage.getItem('currentRoomCode');
