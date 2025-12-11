@@ -1840,6 +1840,36 @@ window.productInfo = productInfo;
 window.productTags = productTags;
 window.cellEdits = cellEdits;
 window.mergeAllData = mergeAllData;
+// Setter functions to update internal variables from firebase.js
+window.setLoadedFiles = function(files) {
+    loadedFiles.length = 0;
+    loadedFiles.push(...files);
+    window.loadedFiles = loadedFiles;
+};
+window.setRawData = function(data) {
+    Object.keys(rawData).forEach(key => {
+        if (Array.isArray(rawData[key])) {
+            rawData[key].length = 0;
+            if (data[key]) rawData[key].push(...data[key]);
+        }
+    });
+    window.rawData = rawData;
+};
+window.setProductInfo = function(info) {
+    Object.keys(productInfo).forEach(key => delete productInfo[key]);
+    Object.assign(productInfo, info);
+    window.productInfo = productInfo;
+};
+window.setProductTags = function(tags) {
+    Object.keys(productTags).forEach(key => delete productTags[key]);
+    Object.assign(productTags, tags);
+    window.productTags = productTags;
+};
+window.setCellEdits = function(edits) {
+    Object.keys(cellEdits).forEach(key => delete cellEdits[key]);
+    Object.assign(cellEdits, edits);
+    window.cellEdits = cellEdits;
+};
 window.updateFileChips = updateFileChips;
 window.initUI = initUI;
 window.showToast = showToast;
