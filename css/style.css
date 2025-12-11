@@ -10,8 +10,8 @@ body {
   background: #f5f5f7;
   min-height: 100vh;
   color: #1d1d1f;
-  line-height: 1.5;
-  padding: 12px;
+  line-height: 1.4;
+  padding: 6px;
   font-size: 13px;
 }
 
@@ -206,10 +206,10 @@ body {
 /* ========== 保存データリスト ========== */
 .saved-section {
   background: white;
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin-bottom: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  border-radius: 6px;
+  padding: 6px 12px;
+  margin-bottom: 4px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
 }
 
 .saved-header {
@@ -298,20 +298,20 @@ body {
 /* ========== ヘッダー ========== */
 .app-header {
   background: white;
-  padding: 12px 16px;
-  border-radius: 8px;
-  margin-bottom: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  padding: 6px 12px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .app-header h1 {
   color: #1d1d1f;
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -372,16 +372,16 @@ body {
 /* ========== フィルタパネル ========== */
 .filter-panel {
   background: white;
-  padding: 12px 16px;
-  border-radius: 8px;
-  margin-bottom: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  padding: 6px 12px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
 }
 
 .filter-row {
   display: flex;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin-bottom: 4px;
   flex-wrap: wrap;
   align-items: center;
 }
@@ -518,11 +518,11 @@ body {
 .date-slider {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
-  padding: 10px 12px;
+  gap: 10px;
+  margin-bottom: 4px;
+  padding: 6px 10px;
   background: #f5f5f7;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .date-slider label {
@@ -611,12 +611,12 @@ body {
 /* ========== オプション行 ========== */
 .options-row {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
   flex-wrap: wrap;
-  padding: 10px 12px;
+  padding: 6px 10px;
   background: #f5f5f7;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .checkbox-label {
@@ -651,34 +651,34 @@ body {
 /* ========== 統計パネル ========== */
 .stats-panel {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   background: white;
-  padding: 10px 12px;
-  border-radius: 8px;
-  margin-bottom: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
   flex-wrap: wrap;
 }
 
 .stat-item {
   flex: 1;
-  min-width: 120px;
-  padding: 8px 12px;
+  min-width: 100px;
+  padding: 4px 8px;
   background: #f5f5f7;
-  border-radius: 6px;
+  border-radius: 5px;
   text-align: center;
 }
 
 .stat-item label {
   display: block;
-  font-size: 11px;
+  font-size: 10px;
   color: #86868b;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   font-weight: 500;
 }
 
 .stat-item span {
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 600;
   color: #007AFF;
 }
@@ -686,24 +686,24 @@ body {
 /* ========== タグ統計 ========== */
 .tag-stats {
   background: white;
-  padding: 12px 16px;
-  border-radius: 8px;
-  margin-bottom: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  padding: 6px 12px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
 }
 
 .tag-stats-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .tag-stats-header h3 {
   color: #1d1d1f;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -733,9 +733,9 @@ body {
 
 .tag-stats-body {
   display: none;
-  padding-top: 10px;
+  padding-top: 6px;
   border-top: 1px solid #e5e5e7;
-  max-height: 320px;
+  max-height: 280px;
   overflow-y: auto;
 }
 
@@ -810,22 +810,22 @@ body {
 /* ========== データテーブル ========== */
 .table-container {
   background: white;
-  padding: 12px;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  padding: 8px;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
 }
 
 .btn-add-product {
   width: 100%;
-  padding: 8px;
+  padding: 6px;
   background: #34C759;
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 5px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
   transition: all 0.2s;
 }
 
@@ -836,7 +836,7 @@ body {
 
 .table-scroll {
   overflow-x: auto;
-  max-height: calc(100vh - 420px);
+  max-height: calc(100vh - 180px);
   border-radius: 6px;
   border: 1px solid #e5e5e7;
 }
@@ -865,7 +865,7 @@ body {
 .data-table th {
   background: #f5f5f7;
   color: #1d1d1f;
-  padding: 8px 6px;
+  padding: 6px 4px;
   text-align: center;
   font-weight: 600;
   white-space: nowrap;
@@ -910,7 +910,7 @@ body {
 }
 
 .data-table td {
-  padding: 6px 6px;
+  padding: 4px 4px;
   border: 1px solid #e5e5e7;
   text-align: center;
 }
