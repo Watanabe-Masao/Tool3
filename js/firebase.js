@@ -156,8 +156,8 @@ export function joinRoom() {
     // 自動的にデータを取得
     downloadFromCloud();
 }
-// チャンクサイズ（800KB - Firestoreの1MB制限に余裕を持たせる）
-const CHUNK_SIZE = 800 * 1024;
+// チャンクサイズ（500KB - Firestoreのフィールド値制限に余裕を持たせる）
+const CHUNK_SIZE = 500 * 1024;
 /**
  * クラウドにデータをアップロード（チャンク分割対応）
  */
@@ -386,7 +386,162 @@ export function showCloudSyncModal() {
         currentRoomCode = savedRoomCode;
         document.getElementById('room-code-input').value = savedRoomCode;
     }
+    // ファイル選択リストを更新
+    updateUploadFileList();
     document.getElementById('cloud-sync-modal').classList.add('show');
+}
+/**
+ * アップロードファイル選択リストを更新
+ */
+export function updateUploadFileList() {
+    const listEl = document.getElementById('upload-file-list');
+    if (!listEl) return;
+    const loadedFiles = window.loadedFiles || [];
+    const rawData = window.rawData || {};
+    if (loadedFiles.length === 0) {
+        listEl.innerHTML = '<div class="no-files-msg">読み込まれたファイルがありません</div>';
+        return;
+    }
+    listEl.innerHTML = loadedFiles.map(fileName => {
+        const fileData = rawData[fileName] || [];
+        const dataSize = JSON.stringify(fileData).length;
+        const sizeStr = dataSize > 1024 * 1024
+            ? (dataSize / 1024 / 1024).toFixed(2) + ' MB'
+            : (dataSize / 1024).toFixed(1) + ' KB';
+        return `
+            <label class="file-checkbox-item">
+                <input type="checkbox" value="${fileName}" checked>
+                <span class="file-name">${fileName}</span>
+                <span class="file-size">${sizeStr}</span>
+            </label>
+        `;
+    }).join('');
+}
+/**
+ * 全ファイルを選択
+ */
+export function selectAllUploadFiles() {
+    const checkboxes = document.querySelectorAll('#upload-file-list input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = true);
+}
+/**
+ * 全ファイルの選択を解除
+ */
+export function clearAllUploadFiles() {
+    const checkboxes = document.querySelectorAll('#upload-file-list input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = false);
+}
+/**
+ * 選択されたファイルのみをアップロード
+ */
+export async function uploadSelectedFiles() {
+    if (!firestore || !currentRoomCode) {
+        alert('❌ 先にルームに参加してください');
+        return;
+    }
+    // 選択されたファイルを取得
+    const checkboxes = document.querySelectorAll('#upload-file-list input[type="checkbox"]:checked');
+    const selectedFiles = Array.from(checkboxes).map(cb => cb.value);
+    if (selectedFiles.length === 0) {
+        alert('❌ アップロードするファイルを選択してください');
+        return;
+    }
+    try {
+        showToast(`⏳ ${selectedFiles.length}ファイルをアップロード中...`);
+        // 選択されたファイルのデータのみを抽出
+        const rawData = window.rawData || {};
+        const productInfo = window.productInfo || {};
+        const productTags = window.productTags || {};
+        const cellEdits = window.cellEdits || {};
+        const dataToUpload = {
+            loadedFiles: selectedFiles,
+            rawData: {},
+            productInfo: {},
+            productTags: productTags,  // タグは全体で共有
+            cellEdits: {}
+        };
+        // 選択されたファイルのデータのみをコピー
+        selectedFiles.forEach(fileName => {
+            if (rawData[fileName]) {
+                dataToUpload.rawData[fileName] = rawData[fileName];
+            }
+        });
+        // 選択されたファイルに含まれる商品の情報をコピー
+        const selectedProducts = new Set();
+        selectedFiles.forEach(fileName => {
+            const fileData = rawData[fileName] || [];
+            fileData.forEach(row => {
+                if (row['商品名']) {
+                    selectedProducts.add(row['商品名']);
+                }
+            });
+        });
+        // 手動追加された商品（どのファイルにも含まれない商品）も含める
+        const allFileProducts = new Set();
+        Object.values(rawData).forEach(fileData => {
+            (fileData || []).forEach(row => {
+                if (row['商品名']) {
+                    allFileProducts.add(row['商品名']);
+                }
+            });
+        });
+        // productInfoにあるがどのファイルにも含まれない商品 = 手動追加商品
+        Object.keys(productInfo).forEach(productName => {
+            if (!allFileProducts.has(productName)) {
+                selectedProducts.add(productName);  // 手動追加商品を含める
+            }
+        });
+        selectedProducts.forEach(productName => {
+            if (productInfo[productName]) {
+                dataToUpload.productInfo[productName] = productInfo[productName];
+            }
+        });
+        // セル編集も選択されたファイルに関連するものと、手動追加分を含める
+        Object.keys(cellEdits).forEach(key => {
+            const parts = key.split('_');
+            const fileName = parts.slice(0, -2).join('_');
+            // 選択ファイルに関連 OR どのファイルにも関連しない（手動編集）
+            const isRelatedToSelectedFile = selectedFiles.includes(fileName) || selectedFiles.some(f => key.includes(f));
+            const isManualEdit = !Object.keys(rawData).some(f => key.includes(f));
+            if (isRelatedToSelectedFile || isManualEdit) {
+                dataToUpload.cellEdits[key] = cellEdits[key];
+            }
+        });
+        // JSONに変換
+        const jsonString = JSON.stringify(dataToUpload);
+        const totalSize = jsonString.length;
+        // チャンクに分割
+        const chunks = [];
+        for (let i = 0; i < jsonString.length; i += CHUNK_SIZE) {
+            chunks.push(jsonString.slice(i, i + CHUNK_SIZE));
+        }
+        // 既存のチャンクを削除
+        const existingChunks = await firestore.collection('rooms').doc(currentRoomCode).collection('chunks').get();
+        const deletePromises = existingChunks.docs.map(doc => doc.ref.delete());
+        await Promise.all(deletePromises);
+        // 新しいチャンクをアップロード
+        const uploadPromises = chunks.map((chunk, index) => {
+            return firestore.collection('rooms').doc(currentRoomCode).collection('chunks').doc(String(index)).set({
+                data: chunk,
+                index: index
+            });
+        });
+        await Promise.all(uploadPromises);
+        // メインドキュメントにメタデータを保存
+        await firestore.collection('rooms').doc(currentRoomCode).set({
+            chunkCount: chunks.length,
+            totalSize: totalSize,
+            fileCount: selectedFiles.length,
+            files: selectedFiles,
+            timestamp: new Date().toISOString(),
+            deviceId: getDeviceId()
+        });
+        showToast(`✅ ${selectedFiles.length}ファイルをアップロード完了 (${(totalSize / 1024 / 1024).toFixed(2)}MB)`);
+    }
+    catch (error) {
+        console.error('Upload error:', error);
+        alert('❌ アップロードエラー: ' + error.message);
+    }
 }
 /**
  * クラウド同期モーダルを閉じる
