@@ -1347,3 +1347,39 @@ document.onclick = function(e) {
 };
 
 initDatabase().then(function() { renderSavedList(); }).catch(function(err) { console.error('DB初期化エラー:', err); });
+
+// Export functions to global scope for HTML onclick handlers
+(window as any).toggleFilesBar = toggleFilesBar;
+(window as any).toggleSavedList = toggleSavedList;
+(window as any).showSaveModal = showSaveModal;
+(window as any).closeSaveModal = closeSaveModal;
+(window as any).saveToDatabase = saveToDatabase;
+(window as any).loadFromDB = loadFromDB;
+(window as any).deleteFromDB = deleteFromDB;
+(window as any).showAddProductModal = showAddProductModal;
+(window as any).closeAddProductModal = closeAddProductModal;
+(window as any).addProduct = addProduct;
+(window as any).deleteProduct = deleteProduct;
+(window as any).editCell = editCell;
+(window as any).toggleFullscreen = toggleFullscreen;
+(window as any).updateTable = updateTable;
+(window as any).toggleDropdown = toggleDropdown;
+(window as any).toggleStore = toggleStore;
+(window as any).toggleSupplier = toggleSupplier;
+(window as any).selectAllStores = selectAllStores;
+(window as any).clearAllStores = clearAllStores;
+(window as any).selectAllSuppliers = selectAllSuppliers;
+(window as any).clearAllSuppliers = clearAllSuppliers;
+(window as any).removeFile = removeFile;
+(window as any).toggleFileFilter = toggleFileFilter;
+(window as any).selectAllFiles = selectAllFiles;
+(window as any).clearAllFileFilters = clearAllFileFilters;
+(window as any).setTag = setTag;
+(window as any).importTags = importTags;
+(window as any).printTable = printTable;
+(window as any).exportToExcel = exportToExcel;
+(window as any).exportToCSV = exportToCSV;
+(window as any).exportTagStats = exportTagStats;
+(window as any).exportTagTemplate = exportTagTemplate;
+(window as any).clearSelection = clearSelection;
+(window as any).toggleTagStats = toggleTagStats;
