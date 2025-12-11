@@ -156,69 +156,123 @@ export function joinRoom() {
     // 自動的にデータを取得
     downloadFromCloud();
 }
+// チャンクサイズ（800KB - Firestoreの1MB制限に余裕を持たせる）
+const CHUNK_SIZE = 800 * 1024;
 /**
- * クラウドにデータをアップロード
+ * クラウドにデータをアップロード（チャンク分割対応）
  */
-export function uploadToCloud() {
+export async function uploadToCloud() {
     if (!firestore || !currentRoomCode) {
         alert('❌ 先にルームに参加してください');
         return;
     }
-    // グローバル変数からデータを取得（app.tsで定義されている）
-    const dataToUpload = {
-        loadedFiles: window.loadedFiles || [],
-        rawData: window.rawData || {},
-        productInfo: window.productInfo || {},
-        productTags: window.productTags || {},
-        cellEdits: window.cellEdits || {},
-        timestamp: new Date().toISOString(),
-        deviceId: getDeviceId()
-    };
-    firestore.collection('rooms').doc(currentRoomCode).set(dataToUpload)
-        .then(() => {
-        showToast('✅ クラウドにアップロード完了');
-    })
-        .catch((error) => {
+    try {
+        showToast('⏳ アップロード中...');
+        // グローバル変数からデータを取得
+        const dataToUpload = {
+            loadedFiles: window.loadedFiles || [],
+            rawData: window.rawData || {},
+            productInfo: window.productInfo || {},
+            productTags: window.productTags || {},
+            cellEdits: window.cellEdits || {}
+        };
+        // JSONに変換
+        const jsonString = JSON.stringify(dataToUpload);
+        const totalSize = jsonString.length;
+        // チャンクに分割
+        const chunks = [];
+        for (let i = 0; i < jsonString.length; i += CHUNK_SIZE) {
+            chunks.push(jsonString.slice(i, i + CHUNK_SIZE));
+        }
+        // 既存のチャンクを削除
+        const existingChunks = await firestore.collection('rooms').doc(currentRoomCode).collection('chunks').get();
+        const deletePromises = existingChunks.docs.map(doc => doc.ref.delete());
+        await Promise.all(deletePromises);
+        // 新しいチャンクをアップロード
+        const uploadPromises = chunks.map((chunk, index) => {
+            return firestore.collection('rooms').doc(currentRoomCode).collection('chunks').doc(String(index)).set({
+                data: chunk,
+                index: index
+            });
+        });
+        await Promise.all(uploadPromises);
+        // メインドキュメントにメタデータを保存
+        await firestore.collection('rooms').doc(currentRoomCode).set({
+            chunkCount: chunks.length,
+            totalSize: totalSize,
+            timestamp: new Date().toISOString(),
+            deviceId: getDeviceId()
+        });
+        showToast(`✅ アップロード完了 (${(totalSize / 1024 / 1024).toFixed(2)}MB)`);
+    }
+    catch (error) {
         console.error('Upload error:', error);
         alert('❌ アップロードエラー: ' + error.message);
-    });
+    }
 }
 /**
- * クラウドからデータをダウンロード
+ * クラウドからデータをダウンロード（チャンク分割対応）
  */
-export function downloadFromCloud() {
+export async function downloadFromCloud() {
     if (!firestore || !currentRoomCode) {
         alert('❌ 先にルームに参加してください');
         return;
     }
-    firestore.collection('rooms').doc(currentRoomCode).get()
-        .then((doc) => {
-        if (!doc.exists) {
+    try {
+        showToast('⏳ ダウンロード中...');
+        // メインドキュメントを取得
+        const mainDoc = await firestore.collection('rooms').doc(currentRoomCode).get();
+        if (!mainDoc.exists) {
             showToast('ℹ️ ルームにデータがありません');
             return;
         }
-        const data = doc.data();
-        // データを復元
-        if (data.loadedFiles)
-            window.loadedFiles = data.loadedFiles;
-        if (data.rawData)
-            window.rawData = data.rawData;
-        if (data.productInfo)
-            window.productInfo = data.productInfo;
-        if (data.productTags)
-            window.productTags = data.productTags;
-        if (data.cellEdits)
-            window.cellEdits = data.cellEdits;
+        const metadata = mainDoc.data();
+        // チャンク分割されたデータかどうかを確認
+        if (metadata.chunkCount) {
+            // チャンクを取得して結合
+            const chunksSnapshot = await firestore.collection('rooms').doc(currentRoomCode).collection('chunks').orderBy('index').get();
+            if (chunksSnapshot.empty) {
+                showToast('ℹ️ ルームにデータがありません');
+                return;
+            }
+            // チャンクを結合
+            let jsonString = '';
+            chunksSnapshot.docs.forEach(doc => {
+                jsonString += doc.data().data;
+            });
+            // JSONをパース
+            const data = JSON.parse(jsonString);
+            // データを復元
+            if (data.loadedFiles) window.loadedFiles = data.loadedFiles;
+            if (data.rawData) window.rawData = data.rawData;
+            if (data.productInfo) window.productInfo = data.productInfo;
+            if (data.productTags) window.productTags = data.productTags;
+            if (data.cellEdits) window.cellEdits = data.cellEdits;
+        } else {
+            // 旧形式（チャンク分割なし）のデータ
+            if (metadata.loadedFiles) window.loadedFiles = metadata.loadedFiles;
+            if (metadata.rawData) window.rawData = metadata.rawData;
+            if (metadata.productInfo) window.productInfo = metadata.productInfo;
+            if (metadata.productTags) window.productTags = metadata.productTags;
+            if (metadata.cellEdits) window.cellEdits = metadata.cellEdits;
+        }
         // UIを更新
         window.mergeAllData();
         window.updateFileChips();
         window.initUI();
+        // ドロップゾーンを非表示、メインコンテンツを表示
+        const dropZone = document.getElementById('drop-zone');
+        const filesBar = document.getElementById('files-bar');
+        const mainContent = document.getElementById('main-content');
+        if (dropZone) dropZone.style.display = 'none';
+        if (filesBar) filesBar.classList.add('show');
+        if (mainContent) mainContent.classList.add('show');
         showToast('✅ クラウドからデータ取得完了');
-    })
-        .catch((error) => {
+    }
+    catch (error) {
         console.error('Download error:', error);
         alert('❌ ダウンロードエラー: ' + error.message);
-    });
+    }
 }
 /**
  * 自動同期を有効化
