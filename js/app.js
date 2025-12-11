@@ -164,6 +164,18 @@ function closeAddProductModal() {
     calendarQuantities = {};
 }
 /**
+ * Show help modal
+ */
+function showHelpModal() {
+    document.getElementById('help-modal').classList.add('show');
+}
+/**
+ * Close help modal
+ */
+function closeHelpModal() {
+    document.getElementById('help-modal').classList.remove('show');
+}
+/**
  * Render calendar for add product modal
  */
 function renderCalendar() {
@@ -732,7 +744,7 @@ function handleFiles(files) {
 function finishLoading() {
     document.getElementById('loading').classList.remove('show');
     if (loadedFiles.length === 0) {
-        dropZone.style.display = 'block';
+        dropZone.style.display = 'flex';
         return;
     }
     mergeAllData();
@@ -742,7 +754,11 @@ function finishLoading() {
     document.getElementById('files-bar').classList.add('show');
     document.getElementById('files-bar-body').classList.add('show');
     document.getElementById('main-content').classList.add('show');
-    document.getElementById('file-filter-panel').style.display = loadedFiles.length > 1 ? 'block' : 'none';
+    document.getElementById('file-filter-panel').style.display = loadedFiles.length > 1 ? 'flex' : 'none';
+    // フィードバック: 読み込んだデータ件数を通知
+    const totalRecords = rawData.data.length;
+    const totalProducts = rawData.products.length;
+    showToast(`✅ ${loadedFiles.length}ファイル読込完了 (${totalProducts}品目、${totalRecords}件のデータ)`);
 }
 function parseWorkbook(wb, fileName) {
     const data = [];
@@ -1712,6 +1728,39 @@ document.onclick = function (e) {
     if (!e.target.closest('.table-wrap') && !e.target.closest('.selection-tooltip') && !e.target.closest('.selection-hint'))
         clearSelection();
 };
+// Keyboard shortcuts
+document.addEventListener('keydown', function (e) {
+    // Esc: Close modals or clear selection
+    if (e.key === 'Escape') {
+        const modals = document.querySelectorAll('.modal.show');
+        if (modals.length > 0) {
+            modals.forEach(m => m.classList.remove('show'));
+            calendarQuantities = {};
+        }
+        else {
+            clearSelection();
+        }
+    }
+    // Ctrl+S: Save data (prevent default browser save)
+    if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        if (loadedFiles.length > 0) {
+            showSaveModal();
+        }
+    }
+    // Ctrl+N: Add new product
+    if (e.ctrlKey && e.key === 'n') {
+        e.preventDefault();
+        if (loadedFiles.length > 0) {
+            showAddProductModal();
+        }
+    }
+    // Ctrl+H: Show help
+    if (e.ctrlKey && e.key === 'h') {
+        e.preventDefault();
+        showHelpModal();
+    }
+});
 initDatabase().then(function () { renderSavedList(); }).catch(function (err) { console.error('DB初期化エラー:', err); });
 // Export functions to global scope for HTML onclick handlers
 window.toggleFilesBar = toggleFilesBar;
@@ -1723,6 +1772,8 @@ window.loadFromDB = loadFromDB;
 window.deleteFromDB = deleteFromDB;
 window.showAddProductModal = showAddProductModal;
 window.closeAddProductModal = closeAddProductModal;
+window.showHelpModal = showHelpModal;
+window.closeHelpModal = closeHelpModal;
 window.addProduct = addProduct;
 window.addProductWithCalendar = addProductWithCalendar;
 window.prevMonth = prevMonth;
