@@ -16,3 +16,7 @@ Thumbs.db
 # Editor directories
 .vscode/
 .idea/
+
+# Environment variables
+.env
+src/env-config.ts

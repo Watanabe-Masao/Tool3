@@ -152,21 +152,85 @@ python3 -m http.server 8000
 
 - **HTML5**: 構造
 - **CSS3**: スタイリング（グラデーション、アニメーション、レスポンシブデザイン）
-- **JavaScript (ES6+)**: アプリケーションロジック
+- **TypeScript**: 型安全なアプリケーションロジック
 - **IndexedDB**: ローカルデータ永続化
+- **Firebase**: クラウド同期（Firestore, Authentication）
 - **SheetJS (XLSX)**: Excel ファイルの読み書き
+
+## ☁️ Firebase クラウド同期の設定
+
+このアプリケーションは Firebase を使用して、PC とスマートフォン間でデータを同期できます。
+
+### 環境変数の設定
+
+Firebase の設定は環境変数で管理されています。
+
+1. **.env ファイルの作成**
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **.env ファイルを編集**
+
+   以下の項目を自分の Firebase プロジェクトの設定値に置き換えてください：
+   ```
+   FIREBASE_API_KEY=your_api_key_here
+   FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
+   FIREBASE_PROJECT_ID=your_project_id
+   FIREBASE_STORAGE_BUCKET=your_project_id.firebasestorage.app
+   FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+   FIREBASE_APP_ID=your_app_id
+   ```
+
+3. **ビルド**
+   ```bash
+   npm run build
+   ```
+
+   ビルド時に自動的に `.env` ファイルから設定を読み込み、`src/env-config.ts` が生成されます。
+
+### Firebase プロジェクトの設定方法
+
+1. [Firebase Console](https://console.firebase.google.com/) にアクセス
+2. 新しいプロジェクトを作成
+3. プロジェクト設定から「ウェブアプリを追加」を選択
+4. 表示される設定値を `.env` ファイルにコピー
+5. Firestore Database を有効化
+6. Authentication で匿名認証を有効化
+
+### 使い方
+
+1. アプリケーションで「☁️ 同期」ボタンをクリック
+2. 「➕ 新規ルーム作成」で6桁のルームコードを生成
+3. 他のデバイスで同じルームコードを入力して「🔗 ルームに参加」
+4. 「⬆️ アップロード」でデータをクラウドに保存
+5. 「⬇️ ダウンロード」で他のデバイスからデータを取得
+6. 「🔄 自動同期」でリアルタイム同期を有効化
 
 ## 📁 ファイル構成
 
 ```
 Tool3/
-├── index.html          # メインHTML
-├── .nojekyll           # GitHub Pages用（Jekyll無効化）
+├── index.html              # メインHTML
+├── .nojekyll               # GitHub Pages用（Jekyll無効化）
+├── .env                    # Firebase環境変数（gitignore）
+├── .env.example            # 環境変数のテンプレート
+├── build-env.js            # 環境変数ビルドスクリプト
+├── package.json            # npm設定
+├── tsconfig.json           # TypeScript設定
 ├── css/
-│   └── style.css       # スタイルシート
-├── js/
-│   └── app.js          # アプリケーションロジック
-└── README.md           # このファイル
+│   └── style.css           # スタイルシート
+├── src/                    # TypeScriptソースコード
+│   ├── app.ts              # メインアプリケーションロジック
+│   ├── firebase.ts         # Firebase同期機能
+│   ├── types.ts            # 型定義
+│   └── env-config.ts       # 環境変数設定（自動生成・gitignore）
+├── js/                     # コンパイル済みJavaScript
+│   ├── app.js              # app.tsのコンパイル結果
+│   ├── firebase.js         # firebase.tsのコンパイル結果
+│   ├── env-config.js       # env-config.tsのコンパイル結果
+│   └── types.js            # types.tsのコンパイル結果
+└── README.md               # このファイル
 ```
 
 ## 🌐 ブラウザ要件
@@ -195,14 +259,43 @@ Tool3/
    - IndexedDB はブラウザ単位で保存されるため、異なるブラウザ間でデータは共有されません
    - HTTPS 接続が推奨されます（GitHub Pages は自動的に HTTPS を提供）
 
-## 🔧 カスタマイズ
+## 🔧 開発・カスタマイズ
+
+### 開発環境のセットアップ
+
+1. **依存関係のインストール**
+   ```bash
+   npm install
+   ```
+
+2. **環境変数の設定**
+   ```bash
+   cp .env.example .env
+   # .envファイルを編集してFirebase設定を追加
+   ```
+
+3. **ビルド**
+   ```bash
+   npm run build
+   ```
+
+4. **開発時の自動ビルド**
+   ```bash
+   npm run watch
+   ```
 
 ### データベース設定の変更
-`js/app.js` の以下の定数を変更:
-```javascript
+`src/app.ts` の以下の定数を変更:
+```typescript
 const DB_NAME = 'VegetableOrderDB';  // データベース名
 const DB_VERSION = 3;                 // バージョン
 const STORE_NAME = 'savedData';       // オブジェクトストア名
+```
+
+### Firebase設定の変更
+`.env` ファイルを編集して、ビルドしてください:
+```bash
+npm run build
 ```
 
 ### スタイルのカスタマイズ

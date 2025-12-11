@@ -2,15 +2,7 @@
  * Firebase Cloud Sync Module
  * PC とスマートフォン間でデータを同期
  */
-// デフォルト Firebase 設定
-const DEFAULT_FIREBASE_CONFIG = {
-    apiKey: "AIzaSyA4PedGVzxuVlAaJ6tSfouh42ZMaus0Gjo",
-    authDomain: "vegetable-order-a823e.firebaseapp.com",
-    projectId: "vegetable-order-a823e",
-    storageBucket: "vegetable-order-a823e.firebasestorage.app",
-    messagingSenderId: "241586853280",
-    appId: "1:241586853280:web:d4b03f83206bfcbedb40c5"
-};
+import { DEFAULT_FIREBASE_CONFIG } from './env-config';
 // Firebase インスタンス
 let firebaseApp = null;
 let firestore = null;

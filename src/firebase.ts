@@ -3,17 +3,9 @@
  * PC とスマートフォン間でデータを同期
  */
 
-declare const firebase: any;
+import { DEFAULT_FIREBASE_CONFIG } from './env-config';
 
-// デフォルト Firebase 設定
-const DEFAULT_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyA4PedGVzxuVlAaJ6tSfouh42ZMaus0Gjo",
-  authDomain: "vegetable-order-a823e.firebaseapp.com",
-  projectId: "vegetable-order-a823e",
-  storageBucket: "vegetable-order-a823e.firebasestorage.app",
-  messagingSenderId: "241586853280",
-  appId: "1:241586853280:web:d4b03f83206bfcbedb40c5"
-};
+declare const firebase: any;
 
 // Firebase インスタンス
 let firebaseApp: any = null;

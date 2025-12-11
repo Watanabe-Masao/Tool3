@@ -7,7 +7,8 @@
     "build": "tsc",
     "watch": "tsc --watch",
     "clean": "rm -rf js/app.js js/app.js.map",
-    "prebuild": "npm run clean"
+    "build-env": "node build-env.js",
+    "prebuild": "npm run clean && npm run build-env"
   },
   "devDependencies": {
     "typescript": "^5.3.3",
