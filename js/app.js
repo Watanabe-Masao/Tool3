@@ -1766,6 +1766,19 @@ document.addEventListener('keydown', function (e) {
 initDatabase().then(function () { renderSavedList(); }).catch(function (err) { console.error('DB初期化エラー:', err); });
 // Set up event listeners for buttons (more reliable than onclick attributes with ES modules)
 document.getElementById('saved-toggle')?.addEventListener('click', toggleSavedList);
+document.getElementById('cloud-toggle')?.addEventListener('click', toggleCloudQuick);
+document.getElementById('cloud-sync-btn')?.addEventListener('click', FirebaseSync.showCloudSyncModal);
+/**
+ * Toggle cloud quick section visibility
+ */
+function toggleCloudQuick() {
+    const el = document.getElementById('cloud-quick');
+    const btn = document.getElementById('cloud-toggle');
+    if (el && btn) {
+        el.classList.toggle('show');
+        btn.textContent = el.classList.contains('show') ? '▲' : '▼';
+    }
+}
 // Export functions to global scope for HTML onclick handlers
 window.toggleFilesBar = toggleFilesBar;
 window.toggleSavedList = toggleSavedList;
