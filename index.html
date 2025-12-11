@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>野菜発注管理システム</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- ドロップゾーン -->
+  <div id="drop-zone" class="drop-zone">
+    <div class="drop-zone-content">
+      <div class="drop-icon">📁</div>
+      <h2>Excelファイルをドロップ</h2>
+      <p>または クリックしてファイルを選択</p>
+      <input type="file" id="file-input" accept=".xls,.xlsx" multiple style="display:none;">
+    </div>
+  </div>
+
+  <!-- ローディング -->
+  <div id="loading" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <p>読み込み中...</p>
+  </div>
+
+  <!-- ファイルバー -->
+  <div id="files-bar" class="files-bar">
+    <div class="files-bar-header">
+      <h3>📂 読込ファイル (<span id="files-count">0</span>件)</h3>
+      <button id="files-bar-toggle" class="toggle-btn" onclick="toggleFilesBar()">▼</button>
+    </div>
+    <div id="files-bar-body" class="files-bar-body">
+      <div id="file-chips" class="file-chips"></div>
+      <input type="file" id="file-input-mini" accept=".xls,.xlsx" multiple style="display:none;">
+      <button class="btn-add-file" onclick="document.getElementById('file-input-mini').click()">➕ ファイル追加</button>
+    </div>
+  </div>
+
+  <!-- 保存データリスト -->
+  <div class="saved-section">
+    <div class="saved-header">
+      <h3>💾 保存データ</h3>
+      <button id="saved-toggle" class="toggle-btn" onclick="toggleSavedList()">▼</button>
+    </div>
+    <div id="saved-list" class="saved-list"></div>
+  </div>
+
+  <!-- メインコンテンツ -->
+  <div id="main-content" class="main-content">
+    <!-- ヘッダー -->
+    <header class="app-header">
+      <h1>🥬 野菜発注管理システム</h1>
+      <div class="header-actions">
+        <button class="btn btn-primary" onclick="showSaveModal()">💾 保存</button>
+        <button class="btn" onclick="printTable()">🖨️ 印刷</button>
+        <button class="btn" onclick="exportToExcel()">📊 Excel出力</button>
+        <button class="btn" onclick="exportToCSV()">📄 CSV出力</button>
+        <button class="btn" onclick="toggleFullscreen()">⛶ 全画面</button>
+      </div>
+    </header>
+
+    <!-- フィルタパネル -->
+    <div class="filter-panel">
+      <div class="filter-row">
+        <div class="filter-group">
+          <label>🔍 検索:</label>
+          <input type="text" id="search-input" placeholder="品目名で検索..." oninput="updateTable()">
+        </div>
+
+        <!-- ファイルフィルタ -->
+        <div id="file-filter-panel" class="filter-group dropdown">
+          <label>📁 ファイル:</label>
+          <button class="filter-btn" onclick="toggleDropdown('file-filter')">
+            <span id="file-btn-text">全選択</span> (<span id="file-filter-count">0</span>)
+          </button>
+          <div id="file-filter-dropdown" class="dropdown-menu">
+            <div class="dropdown-header">
+              <button onclick="selectAllFiles()">全選択</button>
+              <button onclick="clearAllFileFilters()">クリア</button>
+            </div>
+            <div id="file-filter-list" class="checkbox-list"></div>
+          </div>
+        </div>
+
+        <!-- 店舗フィルタ -->
+        <div class="filter-group dropdown">
+          <label>🏪 店舗:</label>
+          <button class="filter-btn" onclick="toggleDropdown('store')">
+            <span id="store-btn-text">全選択</span> (<span id="store-count">0</span>)
+          </button>
+          <div id="store-dropdown" class="dropdown-menu">
+            <div class="dropdown-header">
+              <button onclick="selectAllStores()">全選択</button>
+              <button onclick="clearAllStores()">クリア</button>
+            </div>
+            <div id="store-list" class="checkbox-list"></div>
+          </div>
+        </div>
+
+        <!-- 仕入先フィルタ -->
+        <div class="filter-group dropdown">
+          <label>🚚 仕入先:</label>
+          <button class="filter-btn" onclick="toggleDropdown('supplier')">
+            <span id="supplier-btn-text">全選択</span> (<span id="supplier-count">0</span>)
+          </button>
+          <div id="supplier-dropdown" class="dropdown-menu">
+            <div class="dropdown-header">
+              <button onclick="selectAllSuppliers()">全選択</button>
+              <button onclick="clearAllSuppliers()">クリア</button>
+            </div>
+            <div id="supplier-list" class="checkbox-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 日付スライダー -->
+      <div class="date-slider">
+        <label>📅 期間:</label>
+        <div class="date-slider-track">
+          <input type="range" id="slider-from" min="0" max="0" value="0">
+          <input type="range" id="slider-to" min="0" max="0" value="0">
+          <div id="slider-range" class="slider-range"></div>
+        </div>
+        <div class="slider-labels">
+          <span id="slider-from-label">-</span>
+          <span>〜</span>
+          <span id="slider-to-label">-</span>
+        </div>
+      </div>
+
+      <!-- 表示オプション -->
+      <div class="options-row">
+        <label class="checkbox-label">
+          <input type="checkbox" id="show-zero" onchange="updateTable()"> ゼロ表示
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="show-cost" checked onchange="updateTable()"> 原価
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="show-price" checked onchange="updateTable()"> 売価
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="show-unit" onchange="updateTable()"> 入数
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="show-tag1" checked onchange="updateTable()"> #大分類
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="show-tag2" checked onchange="updateTable()"> #中分類
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="show-tag3" onchange="updateTable()"> #小分類
+        </label>
+        <label>並び順:</label>
+        <select id="sort-order" onchange="updateTable()">
+          <option value="name">品目名順</option>
+          <option value="tag">タグ順</option>
+          <option value="qty-desc">数量多い順</option>
+          <option value="qty-asc">数量少ない順</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 統計パネル -->
+    <div class="stats-panel">
+      <div class="stat-item">
+        <label>原価計:</label>
+        <span>¥<span id="stat-cost">0</span></span>
+      </div>
+      <div class="stat-item">
+        <label>売価計:</label>
+        <span>¥<span id="stat-price">0</span></span>
+      </div>
+      <div class="stat-item">
+        <label>値入率:</label>
+        <span><span id="stat-margin">0</span>%</span>
+      </div>
+    </div>
+
+    <!-- タグ別集計 -->
+    <div class="tag-stats">
+      <div class="tag-stats-header">
+        <h3>📊 タグ別集計</h3>
+        <div class="tag-stats-actions">
+          <label class="file-label">
+            📥 インポート
+            <input type="file" accept=".xlsx,.xls,.csv" onchange="importTags(this)" style="display:none;">
+          </label>
+          <button class="btn-sm" onclick="exportTagTemplate()">📤 テンプレート出力</button>
+          <button class="btn-sm" onclick="exportTagStats()">📊 集計出力</button>
+          <button id="tag-stats-toggle" class="toggle-btn" onclick="toggleTagStats()">▼</button>
+        </div>
+      </div>
+      <div id="tag-stats-body" class="tag-stats-body">
+        <table class="tag-stats-table">
+          <thead>
+            <tr>
+              <th>タグ</th>
+              <th>数量</th>
+              <th>原価計</th>
+              <th>売価計</th>
+              <th>値入率</th>
+            </tr>
+          </thead>
+          <tbody id="tag-stats-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- データテーブル -->
+    <div class="table-container">
+      <button class="btn-add-product" onclick="showAddProductModal()">➕ 商品を追加</button>
+      <div id="table-scroll" class="table-scroll">
+        <div id="no-data" class="no-data">データがありません</div>
+        <table id="data-table" class="data-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 保存モーダル -->
+  <div id="save-modal" class="modal">
+    <div class="modal-content">
+      <h2>💾 データを保存</h2>
+      <label>保存名:</label>
+      <input type="text" id="save-name" placeholder="例: 2024年1月分データ">
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="saveToDatabase()">保存</button>
+        <button class="btn" onclick="closeSaveModal()">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 商品追加モーダル -->
+  <div id="add-product-modal" class="modal">
+    <div class="modal-content">
+      <h2>➕ 商品を追加</h2>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>品目名 *</label>
+          <input type="text" id="add-product-name" placeholder="例: キャベツ L">
+        </div>
+        <div class="form-group">
+          <label>原価</label>
+          <input type="number" id="add-product-cost" placeholder="100">
+        </div>
+        <div class="form-group">
+          <label>売価</label>
+          <input type="number" id="add-product-price" placeholder="150">
+        </div>
+        <div class="form-group">
+          <label>入数</label>
+          <input type="number" id="add-product-unit" placeholder="10">
+        </div>
+        <div class="form-group">
+          <label>#大分類</label>
+          <input type="text" id="add-product-tag1" list="tag1-list" placeholder="野菜">
+          <datalist id="tag1-list"></datalist>
+        </div>
+        <div class="form-group">
+          <label>#中分類</label>
+          <input type="text" id="add-product-tag2" list="tag2-list" placeholder="葉物">
+          <datalist id="tag2-list"></datalist>
+        </div>
+        <div class="form-group">
+          <label>#小分類</label>
+          <input type="text" id="add-product-tag3" list="tag3-list" placeholder="キャベツ">
+          <datalist id="tag3-list"></datalist>
+        </div>
+        <div class="form-group">
+          <label>日付</label>
+          <select id="add-product-date"></select>
+        </div>
+        <div class="form-group">
+          <label>数量</label>
+          <input type="number" id="add-product-qty" placeholder="0">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="addProduct()">追加</button>
+        <button class="btn" onclick="closeAddProductModal()">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 選択ツールチップ -->
+  <div id="selection-tooltip" class="selection-tooltip">
+    <div class="tooltip-header" id="tooltip-header">📊 集計</div>
+    <div class="tooltip-sub" id="tooltip-sub"></div>
+    <div class="tooltip-row">
+      <span>数量:</span>
+      <span id="tooltip-qty">0</span>
+    </div>
+    <div class="tooltip-row">
+      <span>原価計:</span>
+      <span id="tooltip-cost">¥0</span>
+    </div>
+    <div class="tooltip-row">
+      <span>売価計:</span>
+      <span id="tooltip-price">¥0</span>
+    </div>
+    <div class="tooltip-row">
+      <span>粗利:</span>
+      <span id="tooltip-profit">¥0</span>
+    </div>
+    <div class="tooltip-row">
+      <span>値入率:</span>
+      <span id="tooltip-margin">0%</span>
+    </div>
+  </div>
+
+  <!-- 選択ヒント -->
+  <div id="selection-hint" class="selection-hint">
+    <span id="selection-info"></span>
+    <button onclick="clearSelection()">✕ クリア</button>
+  </div>
+
+  <!-- トースト通知 -->
+  <div id="toast" class="toast"></div>
+
+  <!-- 印刷用メタ情報 -->
+  <div id="print-meta" class="print-meta"></div>
+
+  <!-- ライブラリ -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+  <!-- アプリケーションスクリプト -->
+  <script src="js/app.js"></script>
+</body>
+</html>
