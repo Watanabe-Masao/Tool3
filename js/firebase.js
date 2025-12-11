@@ -156,8 +156,8 @@ export function joinRoom() {
     // 自動的にデータを取得
     downloadFromCloud();
 }
-// チャンクサイズ（800KB - Firestoreの1MB制限に余裕を持たせる）
-const CHUNK_SIZE = 800 * 1024;
+// チャンクサイズ（500KB - Firestoreのフィールド値制限に余裕を持たせる）
+const CHUNK_SIZE = 500 * 1024;
 /**
  * クラウドにデータをアップロード（チャンク分割対応）
  */
