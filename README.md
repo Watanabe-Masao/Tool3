@@ -191,12 +191,54 @@ Firebase の設定は環境変数で管理されています。
 
 ### Firebase プロジェクトの設定方法
 
-1. [Firebase Console](https://console.firebase.google.com/) にアクセス
-2. 新しいプロジェクトを作成
-3. プロジェクト設定から「ウェブアプリを追加」を選択
-4. 表示される設定値を `.env` ファイルにコピー
-5. Firestore Database を有効化
-6. Authentication で匿名認証を有効化
+1. **プロジェクト作成**
+   - [Firebase Console](https://console.firebase.google.com/) にアクセス
+   - 「プロジェクトを追加」をクリック
+   - プロジェクト名を入力して作成
+
+2. **ウェブアプリの追加**
+   - プロジェクト設定 → 「ウェブアプリを追加」
+   - アプリのニックネームを入力
+   - 表示される Firebase 設定値を `.env` ファイルにコピー
+
+3. **Firestore Database の有効化**
+   - 左メニューから「Firestore Database」を選択
+   - 「データベースを作成」をクリック
+   - 「本番環境モード」を選択（後でルールを設定）
+   - ロケーションを選択（asia-northeast1 推奨）
+
+4. **🔒 セキュリティルールの設定（重要）**
+   - Firestore Database → 「ルール」タブ
+   - `firestore.rules` ファイルの内容をコピー＆ペースト
+   - 「公開」ボタンをクリック
+
+   ```javascript
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /rooms/{roomCode} {
+         allow read: if request.auth != null
+                     && roomCode.matches('^[A-Z0-9]{6}$');
+         allow write: if request.auth != null
+                      && roomCode.matches('^[A-Z0-9]{6}$')
+                      && request.resource.size() < 5000000;
+         allow delete: if request.auth != null;
+       }
+       match /{document=**} {
+         allow read, write: if false;
+       }
+     }
+   }
+   ```
+
+5. **Authentication の設定**
+   - 左メニューから「Authentication」を選択
+   - 「始める」をクリック
+   - 「Sign-in method」タブ → 「匿名」を有効化
+
+6. **動作確認**
+   - アプリケーションで「☁️ 同期」ボタンをクリック
+   - 自動的に Firebase に接続されることを確認
 
 ### 使い方
 
@@ -215,6 +257,7 @@ Tool3/
 ├── .nojekyll               # GitHub Pages用（Jekyll無効化）
 ├── .env                    # Firebase環境変数（gitignore）
 ├── .env.example            # 環境変数のテンプレート
+├── firestore.rules         # Firestore セキュリティルール
 ├── build-env.js            # 環境変数ビルドスクリプト
 ├── package.json            # npm設定
 ├── tsconfig.json           # TypeScript設定
@@ -258,6 +301,18 @@ Tool3/
    - 完全に静的なアプリケーションのため、サーバーサイド処理は不要です
    - IndexedDB はブラウザ単位で保存されるため、異なるブラウザ間でデータは共有されません
    - HTTPS 接続が推奨されます（GitHub Pages は自動的に HTTPS を提供）
+
+5. **🔒 Firebase セキュリティ**
+   - **必ず Firestore Security Rules を設定してください**
+   - ルール未設定の場合、誰でもデータにアクセス可能な状態になります
+   - `firestore.rules` ファイルを Firebase Console でデプロイすることを強く推奨
+   - 6桁のルームコードのみが有効で、認証済みユーザーのみアクセス可能
+
+6. **📡 オフライン対応**
+   - Firestore のオフライン永続化機能が有効化されています
+   - ネットワーク接続が不安定でも、ローカルキャッシュからデータを読み込めます
+   - 再接続時に自動的にクラウドと同期されます
+   - 複数タブを開いている場合は機能が制限される場合があります
 
 ## 🔧 開発・カスタマイズ
 

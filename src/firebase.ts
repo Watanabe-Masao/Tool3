@@ -75,6 +75,18 @@ function initializeFirebaseWithConfig(firebaseConfig: any): void {
     firestore = firebase.firestore();
     auth = firebase.auth();
 
+    // オフライン永続化を有効化（ネットワーク接続が不安定な環境でもデータを保持）
+    firestore.enablePersistence({ synchronizeTabs: true })
+      .catch((err: any) => {
+        if (err.code === 'failed-precondition') {
+          console.warn('⚠️ 複数タブで開いているためオフライン機能が制限されています');
+        } else if (err.code === 'unimplemented') {
+          console.warn('⚠️ ブラウザがオフライン機能に対応していません');
+        } else {
+          console.error('Persistence error:', err);
+        }
+      });
+
     // 匿名認証
     auth.signInAnonymously()
       .then(() => {

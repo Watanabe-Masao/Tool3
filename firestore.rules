@@ -1,0 +1,56 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ルームコレクション
+    match /rooms/{roomCode} {
+      // ルームコードは6桁の英数字のみ許可
+      allow read: if request.auth != null
+                  && roomCode.matches('^[A-Z0-9]{6}$');
+
+      allow write: if request.auth != null
+                   && roomCode.matches('^[A-Z0-9]{6}$')
+                   && request.resource.data.keys().hasAll(['loadedFiles', 'rawData', 'productInfo', 'productTags', 'cellEdits', 'timestamp', 'deviceId'])
+                   && request.resource.data.timestamp is string
+                   && request.resource.data.deviceId is string
+                   && request.resource.size() < 5000000;  // 5MB制限
+
+      // 削除は認証済みユーザーのみ
+      allow delete: if request.auth != null;
+    }
+
+    // その他のコレクションは全てアクセス拒否
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+/**
+ * セキュリティルールの説明:
+ *
+ * 1. 認証要件:
+ *    - Firebase匿名認証が必須
+ *    - 未認証ユーザーはアクセス不可
+ *
+ * 2. ルームコード検証:
+ *    - 6桁の英数字（大文字A-Z、数字0-9）のみ許可
+ *    - 不正なルームコードへのアクセスを防止
+ *
+ * 3. データ構造検証:
+ *    - 必須フィールドの存在確認
+ *    - timestamp, deviceId の型チェック
+ *
+ * 4. サイズ制限:
+ *    - ドキュメントサイズを5MBに制限
+ *    - 大量データによるFirestore課金を防止
+ *
+ * 5. データ保持期間:
+ *    - 古いデータの自動削除はCloud Functionsで実装推奨
+ *    - 例: 7日以上古いルームを削除
+ *
+ * 注意:
+ * - このルールはFirebase Consoleで手動適用が必要
+ * - ローカルエミュレータでテスト可能
+ * - 本番適用前に十分なテストを実施すること
+ */
