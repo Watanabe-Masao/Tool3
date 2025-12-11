@@ -397,21 +397,20 @@ export function updateUploadFileList() {
     const listEl = document.getElementById('upload-file-list');
     if (!listEl) return;
     const loadedFiles = window.loadedFiles || [];
-    const rawData = window.rawData || {};
     if (loadedFiles.length === 0) {
         listEl.innerHTML = '<div class="no-files-msg">読み込まれたファイルがありません</div>';
         return;
     }
-    listEl.innerHTML = loadedFiles.map(fileName => {
-        const fileData = rawData[fileName] || [];
+    listEl.innerHTML = loadedFiles.map(file => {
+        const fileData = file.data || [];
         const dataSize = JSON.stringify(fileData).length;
         const sizeStr = dataSize > 1024 * 1024
             ? (dataSize / 1024 / 1024).toFixed(2) + ' MB'
             : (dataSize / 1024).toFixed(1) + ' KB';
         return `
             <label class="file-checkbox-item">
-                <input type="checkbox" value="${fileName}" checked>
-                <span class="file-name">${fileName}</span>
+                <input type="checkbox" value="${file.name}" checked>
+                <span class="file-name">${file.name}</span>
                 <span class="file-size">${sizeStr}</span>
             </label>
         `;
@@ -439,74 +438,29 @@ export async function uploadSelectedFiles() {
         alert('❌ 先にルームに参加してください');
         return;
     }
-    // 選択されたファイルを取得
+    // 選択されたファイル名を取得
     const checkboxes = document.querySelectorAll('#upload-file-list input[type="checkbox"]:checked');
-    const selectedFiles = Array.from(checkboxes).map(cb => cb.value);
-    if (selectedFiles.length === 0) {
+    const selectedFileNames = Array.from(checkboxes).map(cb => cb.value);
+    if (selectedFileNames.length === 0) {
         alert('❌ アップロードするファイルを選択してください');
         return;
     }
     try {
-        showToast(`⏳ ${selectedFiles.length}ファイルをアップロード中...`);
+        showToast(`⏳ ${selectedFileNames.length}ファイルをアップロード中...`);
         // 選択されたファイルのデータのみを抽出
-        const rawData = window.rawData || {};
+        const loadedFiles = window.loadedFiles || [];
         const productInfo = window.productInfo || {};
         const productTags = window.productTags || {};
         const cellEdits = window.cellEdits || {};
+        // 選択されたファイルオブジェクトを取得
+        const selectedFileObjects = loadedFiles.filter(f => selectedFileNames.includes(f.name));
         const dataToUpload = {
-            loadedFiles: selectedFiles,
-            rawData: {},
-            productInfo: {},
-            productTags: productTags,  // タグは全体で共有
-            cellEdits: {}
+            loadedFiles: selectedFileObjects,
+            rawData: window.rawData || {},  // マージされたrawDataは全体を保持
+            productInfo: productInfo,
+            productTags: productTags,
+            cellEdits: cellEdits
         };
-        // 選択されたファイルのデータのみをコピー
-        selectedFiles.forEach(fileName => {
-            if (rawData[fileName]) {
-                dataToUpload.rawData[fileName] = rawData[fileName];
-            }
-        });
-        // 選択されたファイルに含まれる商品の情報をコピー
-        const selectedProducts = new Set();
-        selectedFiles.forEach(fileName => {
-            const fileData = rawData[fileName] || [];
-            fileData.forEach(row => {
-                if (row['商品名']) {
-                    selectedProducts.add(row['商品名']);
-                }
-            });
-        });
-        // 手動追加された商品（どのファイルにも含まれない商品）も含める
-        const allFileProducts = new Set();
-        Object.values(rawData).forEach(fileData => {
-            (fileData || []).forEach(row => {
-                if (row['商品名']) {
-                    allFileProducts.add(row['商品名']);
-                }
-            });
-        });
-        // productInfoにあるがどのファイルにも含まれない商品 = 手動追加商品
-        Object.keys(productInfo).forEach(productName => {
-            if (!allFileProducts.has(productName)) {
-                selectedProducts.add(productName);  // 手動追加商品を含める
-            }
-        });
-        selectedProducts.forEach(productName => {
-            if (productInfo[productName]) {
-                dataToUpload.productInfo[productName] = productInfo[productName];
-            }
-        });
-        // セル編集も選択されたファイルに関連するものと、手動追加分を含める
-        Object.keys(cellEdits).forEach(key => {
-            const parts = key.split('_');
-            const fileName = parts.slice(0, -2).join('_');
-            // 選択ファイルに関連 OR どのファイルにも関連しない（手動編集）
-            const isRelatedToSelectedFile = selectedFiles.includes(fileName) || selectedFiles.some(f => key.includes(f));
-            const isManualEdit = !Object.keys(rawData).some(f => key.includes(f));
-            if (isRelatedToSelectedFile || isManualEdit) {
-                dataToUpload.cellEdits[key] = cellEdits[key];
-            }
-        });
         // JSONに変換
         const jsonString = JSON.stringify(dataToUpload);
         const totalSize = jsonString.length;
@@ -531,12 +485,12 @@ export async function uploadSelectedFiles() {
         await firestore.collection('rooms').doc(currentRoomCode).set({
             chunkCount: chunks.length,
             totalSize: totalSize,
-            fileCount: selectedFiles.length,
-            files: selectedFiles,
+            fileCount: selectedFileNames.length,
+            files: selectedFileNames,
             timestamp: new Date().toISOString(),
             deviceId: getDeviceId()
         });
-        showToast(`✅ ${selectedFiles.length}ファイルをアップロード完了 (${(totalSize / 1024 / 1024).toFixed(2)}MB)`);
+        showToast(`✅ ${selectedFileNames.length}ファイルをアップロード完了 (${(totalSize / 1024 / 1024).toFixed(2)}MB)`);
     }
     catch (error) {
         console.error('Upload error:', error);
