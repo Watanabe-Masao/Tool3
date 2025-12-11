@@ -242,19 +242,19 @@ export async function downloadFromCloud() {
             });
             // JSONをパース
             const data = JSON.parse(jsonString);
-            // データを復元
-            if (data.loadedFiles) window.loadedFiles = data.loadedFiles;
-            if (data.rawData) window.rawData = data.rawData;
-            if (data.productInfo) window.productInfo = data.productInfo;
-            if (data.productTags) window.productTags = data.productTags;
-            if (data.cellEdits) window.cellEdits = data.cellEdits;
+            // データを復元（setter関数を使用して内部変数を更新）
+            if (data.loadedFiles) window.setLoadedFiles(data.loadedFiles);
+            if (data.rawData) window.setRawData(data.rawData);
+            if (data.productInfo) window.setProductInfo(data.productInfo);
+            if (data.productTags) window.setProductTags(data.productTags);
+            if (data.cellEdits) window.setCellEdits(data.cellEdits);
         } else {
             // 旧形式（チャンク分割なし）のデータ
-            if (metadata.loadedFiles) window.loadedFiles = metadata.loadedFiles;
-            if (metadata.rawData) window.rawData = metadata.rawData;
-            if (metadata.productInfo) window.productInfo = metadata.productInfo;
-            if (metadata.productTags) window.productTags = metadata.productTags;
-            if (metadata.cellEdits) window.cellEdits = metadata.cellEdits;
+            if (metadata.loadedFiles) window.setLoadedFiles(metadata.loadedFiles);
+            if (metadata.rawData) window.setRawData(metadata.rawData);
+            if (metadata.productInfo) window.setProductInfo(metadata.productInfo);
+            if (metadata.productTags) window.setProductTags(metadata.productTags);
+            if (metadata.cellEdits) window.setCellEdits(metadata.cellEdits);
         }
         // UIを更新
         window.mergeAllData();
@@ -302,17 +302,17 @@ export function enableAutoSync() {
             // 自分のデバイスからのアップロードは無視
             if (data.deviceId === getDeviceId())
                 return;
-            // データを復元
+            // データを復元（setter関数を使用して内部変数を更新）
             if (data.loadedFiles)
-                window.loadedFiles = data.loadedFiles;
+                window.setLoadedFiles(data.loadedFiles);
             if (data.rawData)
-                window.rawData = data.rawData;
+                window.setRawData(data.rawData);
             if (data.productInfo)
-                window.productInfo = data.productInfo;
+                window.setProductInfo(data.productInfo);
             if (data.productTags)
-                window.productTags = data.productTags;
+                window.setProductTags(data.productTags);
             if (data.cellEdits)
-                window.cellEdits = data.cellEdits;
+                window.setCellEdits(data.cellEdits);
             // UIを更新
             window.mergeAllData();
             window.updateFileChips();
