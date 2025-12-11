@@ -2,7 +2,7 @@
  * Firebase Cloud Sync Module
  * PC とスマートフォン間でデータを同期
  */
-import { DEFAULT_FIREBASE_CONFIG } from './env-config';
+import { DEFAULT_FIREBASE_CONFIG } from './env-config.js';
 // Firebase インスタンス
 let firebaseApp = null;
 let firestore = null;
