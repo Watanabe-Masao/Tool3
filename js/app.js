@@ -1764,6 +1764,8 @@ document.addEventListener('keydown', function (e) {
     }
 });
 initDatabase().then(function () { renderSavedList(); }).catch(function (err) { console.error('DB初期化エラー:', err); });
+// Set up event listeners for buttons (more reliable than onclick attributes with ES modules)
+document.getElementById('saved-toggle')?.addEventListener('click', toggleSavedList);
 // Export functions to global scope for HTML onclick handlers
 window.toggleFilesBar = toggleFilesBar;
 window.toggleSavedList = toggleSavedList;
