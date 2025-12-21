@@ -2031,10 +2031,11 @@ function setupFileOrderDragDrop() {
             e.preventDefault();
             this.classList.remove('drag-over');
             if (draggedItem && this !== draggedItem) {
-                const fromId = draggedItem.dataset.fileId;
-                const toId = this.dataset.fileId;
+                const fromId = Number(draggedItem.dataset.fileId);
+                const toId = Number(this.dataset.fileId);
                 const fromIdx = tempFileOrder.indexOf(fromId);
                 const toIdx = tempFileOrder.indexOf(toId);
+                if (fromIdx === -1 || toIdx === -1) return;
                 // 順序を入れ替え
                 tempFileOrder.splice(fromIdx, 1);
                 tempFileOrder.splice(toIdx, 0, fromId);
