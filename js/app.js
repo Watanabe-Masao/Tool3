@@ -1511,6 +1511,7 @@ function parseHaibunFormat(wb, fileName) {
 
             // 入数: 品名の5列後
             const unitCol = prodCol + 5;
+            let unitType = 'pcs'; // デフォルトは個数単位
             if (unitCol < row.length) {
                 const unitStr = String(row[unitCol] || '');
                 // 全角数字・全角英字を半角に変換
@@ -1521,7 +1522,14 @@ function parseHaibunFormat(wb, fileName) {
                 const unitMatch = normalizedStr.match(/(\d+)\s*(入|束|玉|袋|個|本|ｹｰｽ|ケース|[Kk][Gg]?|キロ|[Gg])/i);
                 if (unitMatch) {
                     unit = parseInt(unitMatch[1]);
-                    console.log('入数検出(相対・単位付):', unit, '元値:', unitStr, '列:', unitCol);
+                    const unitSuffix = unitMatch[2].toLowerCase();
+                    // Kg/キロの場合は重量単位としてマーク
+                    if (unitSuffix === 'k' || unitSuffix === 'kg' || unitSuffix === 'キロ') {
+                        unitType = 'kg';
+                    } else if (unitSuffix === 'g') {
+                        unitType = 'g';
+                    }
+                    console.log('入数検出(相対・単位付):', unit, unitType, '元値:', unitStr, '列:', unitCol);
                 } else {
                     // 数字のみのパターン（1, 28など）
                     const numOnly = parseInt(normalizedStr.replace(/[^\d]/g, ''));
@@ -1545,7 +1553,13 @@ function parseHaibunFormat(wb, fileName) {
                         const unitMatch = normalizedStr.match(/(\d+)\s*(入|束|玉|袋|個|本|ｹｰｽ|ケース|[Kk][Gg]?|キロ|[Gg])/i);
                         if (unitMatch) {
                             unit = parseInt(unitMatch[1]);
-                            console.log('入数検出(フォールバック・単位付):', unit, '列:', c);
+                            const unitSuffix = unitMatch[2].toLowerCase();
+                            if (unitSuffix === 'k' || unitSuffix === 'kg' || unitSuffix === 'キロ') {
+                                unitType = 'kg';
+                            } else if (unitSuffix === 'g') {
+                                unitType = 'g';
+                            }
+                            console.log('入数検出(フォールバック・単位付):', unit, unitType, '列:', c);
                             continue;
                         }
                         // 数字のみのパターン（1-100の範囲）
@@ -1568,7 +1582,17 @@ function parseHaibunFormat(wb, fileName) {
                 }
             }
 
-            console.log('商品情報:', foundProd, { 規格: spec, 原価: cost, 売価: price, 入数: unit });
+            // 100gあたり単価の場合、Kg単位を換算（4Kg = 40 x 100g）
+            let effectiveUnit = unit;
+            if (unitType === 'kg' && unit !== null) {
+                effectiveUnit = unit * 10; // 1Kg = 10 x 100g
+                console.log('重量換算: ', unit + 'Kg → ' + effectiveUnit + ' (100gあたり換算)');
+            } else if (unitType === 'g' && unit !== null) {
+                effectiveUnit = Math.max(1, Math.round(unit / 100)); // gを100g単位に換算
+                console.log('重量換算: ', unit + 'g → ' + effectiveUnit + ' (100gあたり換算)');
+            }
+
+            console.log('商品情報:', foundProd, { 規格: spec, 原価: cost, 売価: price, 入数: unit, 単位種別: unitType, 換算入数: effectiveUnit });
 
             // 税抜価格が取得できなかった場合のフォールバック
             if (price === null && cost !== null) {
@@ -1591,7 +1615,7 @@ function parseHaibunFormat(wb, fileName) {
             }
 
             if (!pInfo[prodKey]) {
-                pInfo[prodKey] = { cost, price, unit };
+                pInfo[prodKey] = { cost, price, unit: effectiveUnit, unitType, rawUnit: unit };
             }
             prods.add(prodKey);
 
