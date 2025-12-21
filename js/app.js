@@ -507,17 +507,14 @@ function saveCellEdit(product, date, newVal, td, originalVal) {
         return;
     }
     const cellKey = createCellKey(product, date, store);
-    // 元の値と異なる場合のみ編集履歴に記録
-    if (qty !== originalVal) {
-        if (!cellEdits[cellKey]) {
-            cellEdits[cellKey] = { original: originalVal, edited: qty };
-        }
-        else {
-            cellEdits[cellKey].edited = qty;
-        }
+    // 既存の編集履歴がある場合は、真の元の値を使用
+    const trueOriginal = cellEdits[cellKey] ? cellEdits[cellKey].original : originalVal;
+    // 真の元の値と異なる場合のみ編集履歴に記録
+    if (qty !== trueOriginal) {
+        cellEdits[cellKey] = { original: trueOriginal, edited: qty };
     }
     else {
-        // 元の値に戻した場合は編集履歴から削除
+        // 真の元の値に戻した場合は編集履歴から削除
         delete cellEdits[cellKey];
     }
     var found = false;
