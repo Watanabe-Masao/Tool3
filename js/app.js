@@ -1515,10 +1515,18 @@ function parseHaibunFormat(wb, fileName) {
                 const unitStr = String(row[unitCol] || '');
                 // 全角数字を半角に変換
                 const normalizedStr = unitStr.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+                // 単位付きパターン（8入、10束など）
                 const unitMatch = normalizedStr.match(/(\d+)\s*(入|束|玉|袋|個|本|ｹｰｽ|ケース)/);
                 if (unitMatch) {
                     unit = parseInt(unitMatch[1]);
-                    console.log('入数検出(相対):', unit, '元値:', unitStr, '列:', unitCol);
+                    console.log('入数検出(相対・単位付):', unit, '元値:', unitStr, '列:', unitCol);
+                } else {
+                    // 数字のみのパターン（1, 28など）
+                    const numOnly = parseInt(normalizedStr.replace(/[^\d]/g, ''));
+                    if (!isNaN(numOnly) && numOnly >= 1 && numOnly <= 100) {
+                        unit = numOnly;
+                        console.log('入数検出(相対・数字のみ):', unit, '元値:', unitStr, '列:', unitCol);
+                    }
                 }
             }
 
@@ -1528,12 +1536,19 @@ function parseHaibunFormat(wb, fileName) {
                     const cellStr = String(row[c] || '');
                     const normalizedStr = cellStr.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
 
-                    // 入数パターン
+                    // 入数パターン（単位付きまたは数字のみ）
                     if (unit === null) {
                         const unitMatch = normalizedStr.match(/(\d+)\s*(入|束|玉|袋|個|本|ｹｰｽ|ケース)/);
                         if (unitMatch) {
                             unit = parseInt(unitMatch[1]);
-                            console.log('入数検出(フォールバック):', unit, '列:', c);
+                            console.log('入数検出(フォールバック・単位付):', unit, '列:', c);
+                            continue;
+                        }
+                        // 数字のみのパターン（1-100の範囲）
+                        const numOnly = parseInt(normalizedStr.replace(/[^\d]/g, ''));
+                        if (!isNaN(numOnly) && numOnly >= 1 && numOnly <= 100 && normalizedStr.trim() === String(numOnly)) {
+                            unit = numOnly;
+                            console.log('入数検出(フォールバック・数字のみ):', unit, '列:', c);
                             continue;
                         }
                     }
