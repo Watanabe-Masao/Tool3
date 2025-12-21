@@ -1373,10 +1373,17 @@ function parseHaibunFormat(wb, fileName) {
 
         // データ行をパース
         let curDate = null;
+        let debugRowCount = 0;
 
         for (let r = headerRowIdx + 1; r < json.length; r++) {
             const row = json[r];
             if (!row || row.length === 0) continue;
+
+            // 最初の15行をデバッグ出力
+            if (debugRowCount < 15) {
+                console.log('データ行' + r + ':', row.slice(0, 15));
+                debugRowCount++;
+            }
 
             // 日付を探す（12/21, 12/21(日) などの形式）
             for (let c = 0; c < Math.min(6, row.length); c++) {
@@ -1384,6 +1391,7 @@ function parseHaibunFormat(wb, fileName) {
                 const dm = cellStr.match(/(\d{1,2})\/(\d{1,2})/);
                 if (dm) {
                     curDate = parseInt(dm[1]) + '/' + parseInt(dm[2]);
+                    console.log('日付検出:', curDate, '行:', r);
                     break;
                 }
             }
@@ -1391,19 +1399,19 @@ function parseHaibunFormat(wb, fileName) {
             // 店舗列に数量があるかチェック
             let rowHasQty = false;
             let totalQty = 0;
+            const qtyList = [];
             storeCols.forEach(sc => {
                 const q = Number(row[sc.col]);
                 if (q > 0) {
                     rowHasQty = true;
                     totalQty += q;
+                    qtyList.push(sc.code + ':' + q);
                 }
             });
 
-            if (!rowHasQty) continue;
-
-            // 品名を探す（列2-6の範囲で日本語文字を含む文字列）
+            // 品名を探す（列0-8の範囲で日本語文字を含む文字列）
             let foundProd = '';
-            for (let c = 2; c < Math.min(8, storeStartCol); c++) {
+            for (let c = 0; c < Math.min(9, storeStartCol); c++) {
                 const cellStr = String(row[c] || '').trim();
                 if (!cellStr) continue;
                 // 品名として適切か判定
@@ -1412,7 +1420,7 @@ function parseHaibunFormat(wb, fileName) {
                     !/^\d+$/.test(cellStr) && // 数字のみではない
                     cellStr.indexOf('県産') < 0 && // 県産を含まない
                     !/^\d+\s*(入|束|玉|袋|個|本|kg|g)$/.test(cellStr) && // 単位表記ではない
-                    cellStr.length >= 2 && cellStr.length <= 20; // 適切な長さ
+                    cellStr.length >= 1 && cellStr.length <= 30; // 適切な長さ
 
                 if (isProductName) {
                     foundProd = cellStr;
@@ -1420,7 +1428,16 @@ function parseHaibunFormat(wb, fileName) {
                 }
             }
 
-            if (!foundProd) continue;
+            // デバッグ: 行の状態を出力
+            if (rowHasQty || foundProd) {
+                console.log('行' + r + ':', { 日付: curDate, 品名: foundProd, 数量あり: rowHasQty, 合計: totalQty });
+            }
+
+            if (!rowHasQty) continue;
+            if (!foundProd) {
+                console.log('行' + r + ': 品名が見つからないためスキップ', row.slice(0, 9));
+                continue;
+            }
 
             const prodName = extractProductName(foundProd);
             prods.add(prodName);
@@ -1454,6 +1471,7 @@ function parseHaibunFormat(wb, fileName) {
 
             // 店舗別数量を登録
             if (curDate) {
+                let addedCount = 0;
                 storeCols.forEach(sc => {
                     const q = Number(row[sc.col]);
                     if (q > 0) {
@@ -1465,13 +1483,19 @@ function parseHaibunFormat(wb, fileName) {
                             store: sc.code,
                             quantity: q
                         });
+                        addedCount++;
                     }
                 });
+                if (addedCount > 0) {
+                    console.log('データ追加:', prodName, curDate, addedCount + '件');
+                }
+            } else {
+                console.log('日付なしのためスキップ:', prodName, '行:', r);
             }
         }
     });
 
-    console.log('配分表パース結果:', { dataCount: data.length, productCount: prods.size });
+    console.log('=== 配分表パース結果 ===', { dataCount: data.length, productCount: prods.size });
 
     return {
         data,
