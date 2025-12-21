@@ -1306,7 +1306,7 @@ function updateTagStats() {
         const hasChildren = t2Keys.length > 0;
 
         html += '<div class="tag-category" data-cat="' + catIndex + '">';
-        html += '<div class="tag-category-header" onclick="toggleTagCategory(' + catIndex + ')">';
+        html += '<div class="tag-category-header" onclick="toggleTagCategory(' + catIndex + ', event)">';
         html += '<span class="tag-category-toggle">▶</span>';
         html += '<span class="tag-category-name"><span class="icon">📁</span>' + escapeHtml(t1) + '</span>';
         html += '<div class="tag-category-stats">' + renderStats(d1, false, grandTotal.qty) + '</div>';
@@ -1322,7 +1322,7 @@ function updateTagStats() {
                 const subId = catIndex + '-' + subIndex;
 
                 html += '<div class="tag-subcategory" data-sub="' + subId + '">';
-                html += '<div class="tag-subcategory-header" onclick="toggleTagSubcategory(\'' + subId + '\')">';
+                html += '<div class="tag-subcategory-header" onclick="toggleTagSubcategory(\'' + subId + '\', event)">';
                 if (hasGrandChildren) {
                     html += '<span class="tag-subcategory-toggle">▶</span>';
                 } else {
@@ -1363,7 +1363,7 @@ function updateTagStats() {
         const progressPct = grandTotal.qty > 0 ? (orphanQty / grandTotal.qty * 100) : 0;
 
         html += '<div class="tag-category" data-cat="' + catIndex + '">';
-        html += '<div class="tag-category-header" onclick="toggleTagCategory(' + catIndex + ')">';
+        html += '<div class="tag-category-header" onclick="toggleTagCategory(' + catIndex + ', event)">';
         html += '<span class="tag-category-toggle">▶</span>';
         html += '<span class="tag-category-name"><span class="icon">📂</span>(未分類)</span>';
         html += '<div class="tag-category-stats">' + renderStats(orphanData, false, grandTotal.qty) + '</div>';
@@ -1379,7 +1379,7 @@ function updateTagStats() {
             const subId = catIndex + '-' + subIndex;
 
             html += '<div class="tag-subcategory" data-sub="' + subId + '">';
-            html += '<div class="tag-subcategory-header" onclick="toggleTagSubcategory(\'' + subId + '\')">';
+            html += '<div class="tag-subcategory-header" onclick="toggleTagSubcategory(\'' + subId + '\', event)">';
             if (hasGrandChildren) {
                 html += '<span class="tag-subcategory-toggle">▶</span>';
             } else {
@@ -1418,19 +1418,23 @@ function updateTagStats() {
     accordion.innerHTML = html;
 }
 
-function toggleTagCategory(index) {
+function toggleTagCategory(index, event) {
+    if (event) event.stopPropagation();
     const cat = document.querySelector('.tag-category[data-cat="' + index + '"]');
     if (cat) {
         cat.classList.toggle('expanded');
     }
 }
+window.toggleTagCategory = toggleTagCategory;
 
-function toggleTagSubcategory(id) {
+function toggleTagSubcategory(id, event) {
+    if (event) event.stopPropagation();
     const sub = document.querySelector('.tag-subcategory[data-sub="' + id + '"]');
     if (sub) {
         sub.classList.toggle('expanded');
     }
 }
+window.toggleTagSubcategory = toggleTagSubcategory;
 // ヘッダークリックでソート切り替え
 function toggleSort(key) {
     const select = document.getElementById('sort-order');
