@@ -575,13 +575,30 @@ async function saveToDatabase(overwrite = false) {
         showToast('名前を入力してください');
         return;
     }
+    // 表示設定を収集
+    const displaySettings = {
+        showZero: document.getElementById('show-zero').checked,
+        showCost: document.getElementById('show-cost').checked,
+        showPrice: document.getElementById('show-price').checked,
+        showUnit: document.getElementById('show-unit').checked,
+        showTag1: document.getElementById('show-tag1').checked,
+        showTag2: document.getElementById('show-tag2').checked,
+        showTag3: document.getElementById('show-tag3').checked,
+        sortOrder: document.getElementById('sort-order').value,
+        selectedStores: Array.from(selectedStores),
+        selectedSuppliers: Array.from(selectedSuppliers),
+        sliderFromIdx: sliderFromIdx,
+        sliderToIdx: sliderToIdx,
+        selectedFiles: Array.from(selectedFiles)
+    };
     const savePayload = {
         loadedFiles,
         productInfo,
         allProducts,
         productTags,
         rawData,
-        cellEdits: { ...cellEdits }
+        cellEdits: { ...cellEdits },
+        displaySettings
     };
     try {
         if (overwrite && currentSaveId) {
@@ -618,9 +635,55 @@ async function loadFromDB(id) {
         currentSaveId = id;
         currentSaveName = data.name || '';
         mergeAllData();
-        selectedFiles = new Set(loadedFiles.map(f => f.id));
+        // 表示設定を復元
+        const ds = data.displaySettings;
+        if (ds) {
+            // チェックボックス
+            document.getElementById('show-zero').checked = ds.showZero !== undefined ? ds.showZero : true;
+            document.getElementById('show-cost').checked = ds.showCost !== undefined ? ds.showCost : true;
+            document.getElementById('show-price').checked = ds.showPrice !== undefined ? ds.showPrice : true;
+            document.getElementById('show-unit').checked = ds.showUnit !== undefined ? ds.showUnit : true;
+            document.getElementById('show-tag1').checked = ds.showTag1 || false;
+            document.getElementById('show-tag2').checked = ds.showTag2 || false;
+            document.getElementById('show-tag3').checked = ds.showTag3 || false;
+            // 並び順
+            if (ds.sortOrder) document.getElementById('sort-order').value = ds.sortOrder;
+            // 選択ファイル
+            selectedFiles = ds.selectedFiles ? new Set(ds.selectedFiles) : new Set(loadedFiles.map(f => f.id));
+            // 店舗・業者の選択
+            selectedStores = ds.selectedStores ? new Set(ds.selectedStores) : new Set(rawData.stores);
+            selectedSuppliers = ds.selectedSuppliers ? new Set(ds.selectedSuppliers) : new Set(rawData.suppliers);
+            // 日付スライダー
+            if (ds.sliderFromIdx !== undefined) sliderFromIdx = ds.sliderFromIdx;
+            if (ds.sliderToIdx !== undefined) sliderToIdx = ds.sliderToIdx;
+        } else {
+            selectedFiles = new Set(loadedFiles.map(f => f.id));
+        }
         updateFileChips();
         initUI();
+        // 表示設定をUIに反映（initUI後に再適用）
+        if (ds) {
+            // スライダーの値を設定
+            const maxVal = Math.max(0, allDatesRaw.length - 1);
+            sliderFromIdx = Math.min(ds.sliderFromIdx || 0, maxVal);
+            sliderToIdx = Math.min(ds.sliderToIdx || maxVal, maxVal);
+            document.getElementById('slider-from').value = String(sliderFromIdx);
+            document.getElementById('slider-to').value = String(sliderToIdx);
+            document.getElementById('slider-from-label').textContent = allDatesRaw[sliderFromIdx] || '-';
+            document.getElementById('slider-to-label').textContent = allDatesRaw[sliderToIdx] || '-';
+            // 店舗・業者のチェックボックスを更新
+            document.querySelectorAll('#store-list input').forEach(cb => {
+                const store = cb.value;
+                cb.checked = selectedStores.has(store);
+                cb.parentElement.classList.toggle('selected', cb.checked);
+            });
+            document.querySelectorAll('#supplier-list input').forEach(cb => {
+                const supplier = cb.value;
+                cb.checked = selectedSuppliers.has(supplier);
+                cb.parentElement.classList.toggle('selected', cb.checked);
+            });
+            updateTable();
+        }
         dropZone.style.display = 'none';
         document.getElementById('files-bar').classList.add('show');
         document.getElementById('main-content').classList.add('show');
