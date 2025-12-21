@@ -1,7 +1,7 @@
 {
   "name": "vegetable-order-system",
   "version": "1.0.0",
-  "description": "野菜発注管理システム - Vegetable Order Management System",
+  "description": "発注台帳ビューアー - Order Ledger Viewer",
   "private": true,
   "scripts": {
     "build": "tsc",
