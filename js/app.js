@@ -1169,42 +1169,152 @@ fileInputMini.addEventListener('change', (e) => { if (e.target.files.length > 0)
     e.target.value = '';
 } });
 function handleFiles(files) {
-    const valid = Array.from(files).filter((f) => ['.xls', '.xlsx'].includes(f.name.substring(f.name.lastIndexOf('.')).toLowerCase()));
+    const valid = Array.from(files).filter((f) => ['.xls', '.xlsx', '.csv'].includes(f.name.substring(f.name.lastIndexOf('.')).toLowerCase()));
     if (valid.length === 0) {
-        alert('Excelファイル（.xls, .xlsx）を選択してください');
+        alert('Excelファイル（.xls, .xlsx）またはCSVファイルを選択してください');
         return;
     }
     dropZone.style.display = 'none';
     document.getElementById('loading').classList.add('show');
     let done = 0;
+    let tagFilesProcessed = 0;
+    let dataFilesProcessed = 0;
+
     valid.forEach((file) => {
-        if (loadedFiles.some(f => f.name === file.name)) {
-            done++;
-            if (done === valid.length)
-                finishLoading();
-            return;
-        }
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
                 const result = e.target?.result;
-                const wb = XLSX.read(new Uint8Array(result), { type: 'array' });
-                const fd = detectAndParseWorkbook(wb, file.name);
-                loadedFiles.push({ id: Date.now() + Math.random(), name: file.name, size: file.size, ...fd });
+                let isTagTemplate = false;
+
+                // タグテンプレートかどうかを判定
+                if (file.name.indexOf('タグ') >= 0 || file.name.indexOf('テンプレート') >= 0) {
+                    isTagTemplate = true;
+                } else {
+                    // ファイル内容からタグテンプレートを検出
+                    let data;
+                    if (file.name.endsWith('.csv')) {
+                        const text = new TextDecoder('utf-8').decode(new Uint8Array(result));
+                        const lines = text.split(/\r?\n/).filter(l => l.trim());
+                        data = lines.slice(0, 5).map(l => l.split(',').map(c => c.replace(/^"|"$/g, '').trim()));
+                    } else {
+                        const wb = XLSX.read(new Uint8Array(result), { type: 'array' });
+                        data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' }).slice(0, 5);
+                    }
+                    // ヘッダー行を探してタグテンプレートの特徴をチェック
+                    for (let i = 0; i < data.length; i++) {
+                        const row = data[i].map(c => String(c).toLowerCase());
+                        const hasProdCol = row.some(c => c.indexOf('品目') >= 0 || c.indexOf('商品名') >= 0);
+                        const hasTagCol = row.some(c => c.indexOf('大分類') >= 0 || c.indexOf('中分類') >= 0 || c.indexOf('小分類') >= 0);
+                        // 品目列とタグ列があり、かつ店舗コードや数量がない場合はタグテンプレート
+                        const hasStoreOrQty = row.some(c => /^\d+$/.test(c) || c.indexOf('数量') >= 0 || c.indexOf('合計') >= 0);
+                        if (hasProdCol && hasTagCol && !hasStoreOrQty) {
+                            isTagTemplate = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (isTagTemplate) {
+                    // タグテンプレートとして処理
+                    processTagTemplateFile(file, result);
+                    tagFilesProcessed++;
+                } else {
+                    // 通常のデータファイルとして処理
+                    if (loadedFiles.some(f => f.name === file.name)) {
+                        // 既に読み込み済み
+                    } else {
+                        const wb = XLSX.read(new Uint8Array(result), { type: 'array' });
+                        const fd = detectAndParseWorkbook(wb, file.name);
+                        loadedFiles.push({ id: Date.now() + Math.random(), name: file.name, size: file.size, ...fd });
+                        dataFilesProcessed++;
+                    }
+                }
             }
             catch (err) {
+                console.error('ファイル読み込みエラー:', err);
                 alert(file.name + ' の読み込みに失敗しました');
             }
             done++;
             if (done === valid.length)
-                finishLoading();
+                finishLoading(tagFilesProcessed, dataFilesProcessed);
         };
         reader.readAsArrayBuffer(file);
     });
 }
-function finishLoading() {
+
+// タグテンプレートファイルを処理
+function processTagTemplateFile(file, result) {
+    let data;
+    if (file.name.endsWith('.csv')) {
+        const text = new TextDecoder('utf-8').decode(new Uint8Array(result));
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        data = lines.map(l => l.split(',').map(c => c.replace(/^"|"$/g, '').trim()));
+    } else {
+        const wb = XLSX.read(new Uint8Array(result), { type: 'array' });
+        data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+    }
+
+    var headerIdx = 0;
+    for (var i = 0; i < Math.min(5, data.length); i++) {
+        const row = data[i].map(c => String(c).toLowerCase());
+        if (row.some(c => c.indexOf('品目') >= 0 || c.indexOf('商品') >= 0 || c.indexOf('product') >= 0)) {
+            headerIdx = i;
+            break;
+        }
+    }
+    const header = data[headerIdx].map(c => String(c).toLowerCase());
+    const prodCol = header.findIndex(c => c.indexOf('品目') >= 0 || c.indexOf('商品') >= 0 || c.indexOf('product') >= 0);
+    const tag1Col = header.findIndex(c => c.indexOf('大分類') >= 0 || c.indexOf('親') >= 0 || c.indexOf('tag1') >= 0);
+    const tag2Col = header.findIndex(c => c.indexOf('中分類') >= 0 || c.indexOf('子') >= 0 || c.indexOf('tag2') >= 0);
+    const tag3Col = header.findIndex(c => c.indexOf('小分類') >= 0 || c.indexOf('孫') >= 0 || c.indexOf('tag3') >= 0);
+
+    if (prodCol === -1) {
+        showToast('❌ タグテンプレート: 品目名列が見つかりません');
+        return;
+    }
+
+    var count = 0, updatedCount = 0;
+    for (var i = headerIdx + 1; i < data.length; i++) {
+        const row = data[i];
+        const prod = String(row[prodCol] || '').trim();
+        if (!prod) continue;
+
+        let matchedProd = allProducts.find(p => p === prod);
+        if (!matchedProd) {
+            const partialMatches = allProducts.filter(p => p.indexOf(prod) >= 0 || prod.indexOf(p) >= 0);
+            if (partialMatches.length > 0) {
+                partialMatches.sort((a, b) => Math.abs(a.length - prod.length) - Math.abs(b.length - prod.length));
+                matchedProd = partialMatches[0];
+            }
+        }
+
+        if (matchedProd) {
+            if (!productTags[matchedProd]) productTags[matchedProd] = {};
+            var hasChange = false;
+            if (tag1Col >= 0) {
+                const newVal = String(row[tag1Col] || '').trim();
+                if (newVal) { productTags[matchedProd].tag1 = newVal; hasChange = true; }
+            }
+            if (tag2Col >= 0) {
+                const newVal = String(row[tag2Col] || '').trim();
+                if (newVal) { productTags[matchedProd].tag2 = newVal; hasChange = true; }
+            }
+            if (tag3Col >= 0) {
+                const newVal = String(row[tag3Col] || '').trim();
+                if (newVal) { productTags[matchedProd].tag3 = newVal; hasChange = true; }
+            }
+            if (hasChange) updatedCount++;
+            count++;
+        }
+    }
+
+    console.log('タグテンプレート読込完了:', file.name, { マッチ: count, 更新: updatedCount });
+}
+
+function finishLoading(tagFilesProcessed = 0, dataFilesProcessed = 0) {
     document.getElementById('loading').classList.remove('show');
-    if (loadedFiles.length === 0) {
+    if (loadedFiles.length === 0 && tagFilesProcessed === 0) {
         dropZone.style.display = 'flex';
         return;
     }
@@ -1226,7 +1336,17 @@ function finishLoading() {
     // フィードバック: 読み込んだデータ件数を通知
     const totalRecords = rawData.data.length;
     const totalProducts = rawData.products.length;
-    showToast(`✅ ${loadedFiles.length}ファイル読込完了 (${totalProducts}品目、${totalRecords}件のデータ)`);
+    let msg = '';
+    if (dataFilesProcessed > 0) {
+        msg += `✅ ${loadedFiles.length}ファイル読込完了 (${totalProducts}品目、${totalRecords}件のデータ)`;
+    }
+    if (tagFilesProcessed > 0) {
+        if (msg) msg += '\n';
+        msg += `🏷️ タグテンプレート${tagFilesProcessed}件を適用しました`;
+        updateTagStats();
+        renderTable();
+    }
+    if (msg) showToast(msg);
 }
 function parseWorkbook(wb, fileName) {
     const data = [];
