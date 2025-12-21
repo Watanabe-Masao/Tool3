@@ -1253,169 +1253,187 @@ function parseHaibunFormat(wb, fileName) {
 
     wb.SheetNames.forEach((sn) => {
         const json = window.XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: '' });
-        if (json.length < 10) return;
+        if (json.length < 8) return;
 
         // 配分表形式かどうかを検出
         let isHaibun = false;
         let headerRowIdx = -1;
-        for (let r = 0; r < Math.min(10, json.length); r++) {
-            const rowStr = json[r].join('');
+
+        for (let r = 0; r < Math.min(15, json.length); r++) {
+            const rowStr = (json[r] || []).join('');
             if (rowStr.indexOf('配分') >= 0 || rowStr.indexOf('商品連絡書') >= 0) {
                 isHaibun = true;
             }
-            // ヘッダー行を探す（納品日, 産地, 品名などを含む行）
-            const row = json[r];
-            for (let c = 0; c < row.length; c++) {
-                const cell = String(row[c] || '');
-                if (cell.indexOf('納品日') >= 0 || cell === '納品') {
+            // ヘッダー行を探す
+            const row = json[r] || [];
+            for (let c = 0; c < Math.min(10, row.length); c++) {
+                const cell = String(row[c] || '').trim();
+                if (cell === '納品日' || cell === '納品' || cell.indexOf('納品日') >= 0) {
+                    headerRowIdx = r;
+                    break;
+                }
+            }
+            if (headerRowIdx >= 0) break;
+        }
+
+        console.log('配分表検出:', { isHaibun, headerRowIdx, sheetName: sn });
+
+        if (!isHaibun && headerRowIdx < 0) return;
+        // 配分が見つかった場合、ヘッダー行がなくても店舗コード行を探す
+        if (headerRowIdx < 0) {
+            for (let r = 5; r < Math.min(12, json.length); r++) {
+                const row = json[r] || [];
+                let numCount = 0;
+                for (let c = 8; c < Math.min(50, row.length); c++) {
+                    if (/^\d{1,3}$/.test(String(row[c] || '').trim())) numCount++;
+                }
+                if (numCount >= 5) {
                     headerRowIdx = r;
                     break;
                 }
             }
         }
 
-        if (!isHaibun || headerRowIdx < 0) return;
+        if (headerRowIdx < 0) return;
 
         sheets.push(sn);
 
         // ヘッダー行から店舗コードを取得
-        const hdrRow = json[headerRowIdx];
+        const hdrRow = json[headerRowIdx] || [];
         const storeCols = [];
         let storeStartCol = -1;
 
         // 列マッピングを検出
-        let colDate = -1, colOrigin = -1, colProduct = -1, colSpec = -1;
+        let colDate = 1; // デフォルトは列B
 
         for (let c = 0; c < hdrRow.length; c++) {
             const cell = String(hdrRow[c] || '').trim();
-            if (cell.indexOf('納品日') >= 0 || cell === '納品') colDate = c;
-            else if (cell.indexOf('産地') >= 0) colOrigin = c;
-            else if (cell === '品' || cell === '品名' || cell.indexOf('品目') >= 0) colProduct = c;
-            else if (cell.indexOf('規') >= 0 || cell === '格') colSpec = c;
-            // 店舗コード列の検出（数字のみの列）
-            else if (/^\d{1,3}$/.test(cell) && storeStartCol < 0) {
+            if (cell === '納品日' || cell === '納品') {
+                colDate = c;
+            }
+            // 店舗コード列の検出（2-3桁の数字）
+            if (/^\d{1,3}$/.test(cell) && storeStartCol < 0 && c >= 6) {
                 storeStartCol = c;
             }
         }
 
         // 店舗コードを収集
+        console.log('店舗コード開始列:', storeStartCol);
         if (storeStartCol > 0) {
             for (let c = storeStartCol; c < hdrRow.length; c++) {
                 const code = String(hdrRow[c] || '').trim();
-                if (code === '合計' || code === '計' || code === '納品数' || code.indexOf('納品') >= 0) break;
+                if (code === '合計' || code === '計' || code.indexOf('納品') >= 0 || code.indexOf('売') >= 0) break;
                 if (/^\d+$/.test(code)) {
                     storeCols.push({ col: c, code: code });
                 }
             }
         }
 
-        // データ行をパース（交互の2行構造に対応）
-        let curDate = null;
-        let curProd = null;
-        let curCost = null;
-        let curPrice = null;
-        let curUnit = null;
+        console.log('検出された店舗数:', storeCols.length, storeCols.slice(0, 5));
 
-        for (let r = headerRowIdx + 2; r < json.length; r++) {
+        if (storeCols.length === 0) return;
+
+        // データ行をパース
+        let curDate = null;
+
+        for (let r = headerRowIdx + 1; r < json.length; r++) {
             const row = json[r];
             if (!row || row.length === 0) continue;
 
-            // 日付を探す（どの列にあっても検出）
-            for (let c = 0; c < Math.min(5, row.length); c++) {
+            // 日付を探す（12/21, 12/21(日) などの形式）
+            for (let c = 0; c < Math.min(6, row.length); c++) {
                 const cellStr = String(row[c] || '');
-                const dm = cellStr.match(/(\d+)\/(\d+)/);
+                const dm = cellStr.match(/(\d{1,2})\/(\d{1,2})/);
                 if (dm) {
                     curDate = parseInt(dm[1]) + '/' + parseInt(dm[2]);
                     break;
                 }
             }
 
-            // 品名を探す（品名っぽい文字列を検出）
-            let foundProd = '';
-            let rowHasQty = false;
-
             // 店舗列に数量があるかチェック
+            let rowHasQty = false;
+            let totalQty = 0;
             storeCols.forEach(sc => {
                 const q = Number(row[sc.col]);
-                if (q > 0) rowHasQty = true;
+                if (q > 0) {
+                    rowHasQty = true;
+                    totalQty += q;
+                }
             });
 
-            // 品名列から品名を取得
-            if (colProduct >= 0) {
-                const prodCell = String(row[colProduct] || '').trim();
-                if (prodCell && !/^\d+$/.test(prodCell) && prodCell.length > 0) {
-                    foundProd = prodCell;
+            if (!rowHasQty) continue;
+
+            // 品名を探す（列2-6の範囲で日本語文字を含む文字列）
+            let foundProd = '';
+            for (let c = 2; c < Math.min(8, storeStartCol); c++) {
+                const cellStr = String(row[c] || '').trim();
+                if (!cellStr) continue;
+                // 品名として適切か判定
+                const isProductName =
+                    /[ぁ-んァ-ンー一-龥]/.test(cellStr) && // 日本語を含む
+                    !/^\d+$/.test(cellStr) && // 数字のみではない
+                    cellStr.indexOf('県産') < 0 && // 県産を含まない
+                    !/^\d+\s*(入|束|玉|袋|個|本|kg|g)$/.test(cellStr) && // 単位表記ではない
+                    cellStr.length >= 2 && cellStr.length <= 20; // 適切な長さ
+
+                if (isProductName) {
+                    foundProd = cellStr;
+                    break;
                 }
             }
 
-            // 品名が見つからない場合、列2-5を探す
-            if (!foundProd) {
-                for (let c = 2; c < Math.min(6, storeStartCol > 0 ? storeStartCol : row.length); c++) {
-                    const cellStr = String(row[c] || '').trim();
-                    // 品名らしい文字列（漢字・ひらがな・カタカナを含む、数字のみでない）
-                    if (cellStr && /[ぁ-んァ-ン一-龥]/.test(cellStr) && !/^\d+$/.test(cellStr) &&
-                        cellStr !== '高知県産' && cellStr !== '愛媛県産' && cellStr.indexOf('県産') < 0 &&
-                        !/^\d+入$/.test(cellStr) && !/^\d+束$/.test(cellStr) && !/^\d+玉$/.test(cellStr)) {
-                        foundProd = cellStr;
-                        break;
-                    }
+            if (!foundProd) continue;
+
+            const prodName = extractProductName(foundProd);
+            prods.add(prodName);
+
+            // 原価・売価・入数を探す
+            let cost = null, price = null, unit = null;
+            for (let c = 3; c < Math.min(storeStartCol, 10); c++) {
+                const cellStr = String(row[c] || '');
+                // 入数パターン
+                const unitMatch = cellStr.match(/(\d+)\s*(入|束|玉|袋|個|本)/);
+                if (unitMatch) {
+                    unit = parseInt(unitMatch[1]);
+                    continue;
+                }
+                // 数値（原価・売価候補）
+                const numVal = parseFloat(cellStr.replace(/[^\d.]/g, ''));
+                if (!isNaN(numVal) && numVal >= 10 && numVal < 5000) {
+                    if (cost === null) cost = numVal;
+                    else if (price === null) price = numVal;
                 }
             }
 
-            // 数量のある行で品名が見つかった場合のみ処理
-            if (rowHasQty && foundProd) {
-                curProd = extractProductName(foundProd);
-                prods.add(curProd);
+            // 原価と売価の大小関係を確認
+            if (cost !== null && price !== null && cost > price) {
+                [cost, price] = [price, cost];
+            }
 
-                // 原価・売価・入数を探す（数値列から推測）
-                const numericVals = [];
-                for (let c = 3; c < Math.min(storeStartCol > 0 ? storeStartCol : 10, row.length); c++) {
-                    const cellStr = String(row[c] || '');
-                    // 入数パターン
-                    const unitMatch = cellStr.match(/(\d+)\s*入/);
-                    if (unitMatch) {
-                        curUnit = parseInt(unitMatch[1]);
-                        continue;
+            if (!pInfo[prodName]) {
+                pInfo[prodName] = { cost, price, unit };
+            }
+
+            // 店舗別数量を登録
+            if (curDate) {
+                storeCols.forEach(sc => {
+                    const q = Number(row[sc.col]);
+                    if (q > 0) {
+                        data.push({
+                            fileName,
+                            supplier: sn,
+                            product: prodName,
+                            date: curDate,
+                            store: sc.code,
+                            quantity: q
+                        });
                     }
-                    // 数値
-                    const numVal = parseFloat(cellStr.replace(/[^\d.]/g, ''));
-                    if (!isNaN(numVal) && numVal > 0 && numVal < 10000) {
-                        numericVals.push(numVal);
-                    }
-                }
-
-                // 原価・売価を推定（小さい方が原価、大きい方が売価）
-                if (numericVals.length >= 2) {
-                    numericVals.sort((a, b) => a - b);
-                    curCost = numericVals[0];
-                    curPrice = numericVals[1];
-                } else if (numericVals.length === 1) {
-                    curCost = numericVals[0];
-                }
-
-                if (!pInfo[curProd]) {
-                    pInfo[curProd] = { cost: curCost, price: curPrice, unit: curUnit };
-                }
-
-                // 店舗別数量を登録
-                if (curDate) {
-                    storeCols.forEach(sc => {
-                        const q = Number(row[sc.col]);
-                        if (q > 0) {
-                            data.push({
-                                fileName,
-                                supplier: sn,
-                                product: curProd,
-                                date: curDate,
-                                store: sc.code,
-                                quantity: q
-                            });
-                        }
-                    });
-                }
+                });
             }
         }
     });
+
+    console.log('配分表パース結果:', { dataCount: data.length, productCount: prods.size });
 
     return {
         data,
@@ -1427,36 +1445,51 @@ function parseHaibunFormat(wb, fileName) {
 
 // フォーマット検出と適切なパーサー選択
 function detectAndParseWorkbook(wb, fileName) {
-    // 最初のシートでフォーマットを検出
-    const firstSheet = wb.Sheets[wb.SheetNames[0]];
-    const json = window.XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
-
-    // 配分表形式かどうかを判定
+    // 全シートをチェック
     let isHaibun = false;
-    for (let r = 0; r < Math.min(10, json.length); r++) {
-        const rowStr = json[r].join('');
-        if (rowStr.indexOf('配分') >= 0 || rowStr.indexOf('商品連絡書') >= 0) {
-            isHaibun = true;
-            break;
+
+    for (const sheetName of wb.SheetNames) {
+        const sheet = wb.Sheets[sheetName];
+        const json = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+        for (let r = 0; r < Math.min(15, json.length); r++) {
+            const row = json[r] || [];
+            const rowStr = row.join('');
+
+            // 配分表のキーワード検出
+            if (rowStr.indexOf('配分') >= 0 || rowStr.indexOf('商品連絡書') >= 0) {
+                isHaibun = true;
+                console.log('配分キーワード検出:', rowStr.substring(0, 50), 'row:', r);
+                break;
+            }
+
+            // ヘッダー行の特徴を確認（納品日 + 産地/品の組み合わせ）
+            let hasNouhin = false, hasSanchi = false, hasHinmei = false;
+            for (let c = 0; c < Math.min(15, row.length); c++) {
+                const cell = String(row[c] || '').trim();
+                if (cell === '納品日' || cell === '納品') hasNouhin = true;
+                if (cell === '産地') hasSanchi = true;
+                if (cell === '品' || cell === '品名') hasHinmei = true;
+            }
+            if (hasNouhin && (hasSanchi || hasHinmei)) {
+                isHaibun = true;
+                console.log('ヘッダー構造で配分表を検出:', 'row:', r);
+                break;
+            }
         }
-        // ヘッダー行の特徴を確認
-        const row = json[r];
-        let hasNouhin = false, hasSanchi = false, hasHinmei = false;
-        for (let c = 0; c < row.length; c++) {
-            const cell = String(row[c] || '');
-            if (cell.indexOf('納品日') >= 0 || cell === '納品') hasNouhin = true;
-            if (cell.indexOf('産地') >= 0) hasSanchi = true;
-            if (cell === '品' || cell === '品名') hasHinmei = true;
-        }
-        if (hasNouhin && (hasSanchi || hasHinmei)) {
-            isHaibun = true;
-            break;
-        }
+        if (isHaibun) break;
     }
 
+    console.log('フォーマット判定結果:', { fileName, isHaibun });
+
     if (isHaibun) {
-        console.log('配分表形式を検出: ' + fileName);
-        return parseHaibunFormat(wb, fileName);
+        const result = parseHaibunFormat(wb, fileName);
+        // 配分表パースが失敗した場合は従来形式を試す
+        if (result.data.length === 0) {
+            console.log('配分表パース失敗、従来形式を試行');
+            return parseWorkbook(wb, fileName);
+        }
+        return result;
     } else {
         return parseWorkbook(wb, fileName);
     }
