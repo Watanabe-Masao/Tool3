@@ -1,5 +1,3 @@
-// Firebase imports
-import * as FirebaseSync from './firebase.js';
 // Database constants
 const DB_NAME = 'VegetableOrderDB';
 const DB_VERSION = 3;
@@ -1766,19 +1764,6 @@ document.addEventListener('keydown', function (e) {
 initDatabase().then(function () { renderSavedList(); }).catch(function (err) { console.error('DB初期化エラー:', err); });
 // Set up event listeners for buttons (more reliable than onclick attributes with ES modules)
 document.getElementById('saved-toggle')?.addEventListener('click', toggleSavedList);
-document.getElementById('cloud-toggle')?.addEventListener('click', toggleCloudQuick);
-document.getElementById('cloud-sync-btn')?.addEventListener('click', FirebaseSync.showCloudSyncModal);
-/**
- * Toggle cloud quick section visibility
- */
-function toggleCloudQuick() {
-    const el = document.getElementById('cloud-quick');
-    const btn = document.getElementById('cloud-toggle');
-    if (el && btn) {
-        el.classList.toggle('show');
-        btn.textContent = el.classList.contains('show') ? '▲' : '▼';
-    }
-}
 // Export functions to global scope for HTML onclick handlers
 window.toggleFilesBar = toggleFilesBar;
 window.toggleSavedList = toggleSavedList;
@@ -1819,57 +1804,6 @@ window.exportTagStats = exportTagStats;
 window.exportTagTemplate = exportTagTemplate;
 window.clearSelection = clearSelection;
 window.toggleTagStats = toggleTagStats;
-// Firebase cloud sync functions
-window.showCloudSyncModal = FirebaseSync.showCloudSyncModal;
-window.closeCloudSyncModal = FirebaseSync.closeCloudSyncModal;
-window.initFirebase = FirebaseSync.initFirebase;
-window.autoInitFirebase = FirebaseSync.autoInitFirebase;
-window.createRoom = FirebaseSync.createRoom;
-window.joinRoom = FirebaseSync.joinRoom;
-window.uploadToCloud = FirebaseSync.uploadToCloud;
-window.downloadFromCloud = FirebaseSync.downloadFromCloud;
-window.enableAutoSync = FirebaseSync.enableAutoSync;
-window.leaveRoom = FirebaseSync.leaveRoom;
-window.selectAllUploadFiles = FirebaseSync.selectAllUploadFiles;
-window.clearAllUploadFiles = FirebaseSync.clearAllUploadFiles;
-window.uploadSelectedFiles = FirebaseSync.uploadSelectedFiles;
-// Export data for Firebase sync
-window.loadedFiles = loadedFiles;
-window.rawData = rawData;
-window.productInfo = productInfo;
-window.productTags = productTags;
-window.cellEdits = cellEdits;
-window.mergeAllData = mergeAllData;
-// Setter functions to update internal variables from firebase.js
-window.setLoadedFiles = function(files) {
-    loadedFiles.length = 0;
-    loadedFiles.push(...files);
-    window.loadedFiles = loadedFiles;
-};
-window.setRawData = function(data) {
-    Object.keys(rawData).forEach(key => {
-        if (Array.isArray(rawData[key])) {
-            rawData[key].length = 0;
-            if (data[key]) rawData[key].push(...data[key]);
-        }
-    });
-    window.rawData = rawData;
-};
-window.setProductInfo = function(info) {
-    Object.keys(productInfo).forEach(key => delete productInfo[key]);
-    Object.assign(productInfo, info);
-    window.productInfo = productInfo;
-};
-window.setProductTags = function(tags) {
-    Object.keys(productTags).forEach(key => delete productTags[key]);
-    Object.assign(productTags, tags);
-    window.productTags = productTags;
-};
-window.setCellEdits = function(edits) {
-    Object.keys(cellEdits).forEach(key => delete cellEdits[key]);
-    Object.assign(cellEdits, edits);
-    window.cellEdits = cellEdits;
-};
 window.updateFileChips = updateFileChips;
 window.initUI = initUI;
 window.showToast = showToast;
