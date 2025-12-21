@@ -1801,11 +1801,23 @@ async function downloadOfflineApp() {
         // app.jsを取得
         const appRes = await fetch('js/app.js');
         const appJs = await appRes.text();
+        // 現在のデータを埋め込み用にエクスポート
+        const embeddedData = {
+            rawData: rawData,
+            loadedFiles: loadedFiles,
+            cellEdits: cellEdits,
+            productInfo: productInfo,
+            productTags: productTags
+        };
+        const dataScript = `<script>
+// 埋め込みデータ（オフライン版用）
+window.__EMBEDDED_DATA__ = ${JSON.stringify(embeddedData)};
+</script>`;
         // HTMLを変換：外部リンクをインラインに置換
         html = html.replace(/<link rel="stylesheet" href="css\/style.css">/, `<style>${css}</style>`);
         html = html.replace(/<script src="https:\/\/cdn\.sheetjs\.com[^"]+"><\/script>/, `<script>${xlsxJs}<\/script>`);
         html = html.replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/qrcode[^"]+"><\/script>/, `<script>${qrJs}<\/script>`);
-        html = html.replace(/<script type="module" src="js\/app\.js[^"]*"><\/script>/, `<script>${appJs}<\/script>`);
+        html = html.replace(/<script type="module" src="js\/app\.js[^"]*"><\/script>/, `${dataScript}\n<script>${appJs}<\/script>`);
         // ダウンロード
         const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
         const url = URL.createObjectURL(blob);
@@ -1816,14 +1828,35 @@ async function downloadOfflineApp() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        showToast('オフライン版をダウンロードしました');
+        showToast('オフライン版をダウンロードしました（データ含む）');
     }
     catch (err) {
         console.error('オフラインダウンロードエラー:', err);
         showToast('ダウンロードに失敗しました');
     }
 }
-initDatabase().then(function () { renderSavedList(); }).catch(function (err) { console.error('DB初期化エラー:', err); });
+// 埋め込みデータの読み込み（オフライン版用）
+function loadEmbeddedData() {
+    if (window.__EMBEDDED_DATA__) {
+        const data = window.__EMBEDDED_DATA__;
+        rawData = data.rawData || [];
+        loadedFiles = data.loadedFiles || [];
+        Object.assign(cellEdits, data.cellEdits || {});
+        Object.assign(productInfo, data.productInfo || {});
+        Object.assign(productTags, data.productTags || {});
+        if (rawData.length > 0) {
+            document.getElementById('drop-zone').style.display = 'none';
+            document.getElementById('main-content').style.display = 'block';
+            updateFileChips();
+            initUI();
+            showToast('埋め込みデータを読み込みました');
+        }
+    }
+}
+initDatabase().then(function () {
+    renderSavedList();
+    loadEmbeddedData();
+}).catch(function (err) { console.error('DB初期化エラー:', err); });
 // Set up event listeners for buttons (more reliable than onclick attributes with ES modules)
 document.getElementById('saved-toggle')?.addEventListener('click', toggleSavedList);
 // Export functions to global scope for HTML onclick handlers
