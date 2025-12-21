@@ -4,6 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>発注台帳ビューアー</title>
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#4a90d9">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="発注台帳">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <!-- Deployed: 2025-12-11 -->
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -463,5 +470,16 @@
 
   <!-- アプリケーションスクリプト -->
   <script type="module" src="js/app.js?v=20251211-10"></script>
+
+  <!-- Service Worker登録 -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('SW registered:', reg.scope))
+          .catch(err => console.log('SW registration failed:', err));
+      });
+    }
+  </script>
 </body>
 </html>
