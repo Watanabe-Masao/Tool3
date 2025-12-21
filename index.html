@@ -56,6 +56,8 @@
         <button class="btn btn-primary" onclick="showSaveModal()">💾 保存</button>
         <button class="btn" onclick="printTable()">🖨️ 印刷</button>
         <button class="btn" onclick="exportToCSV()">📄 CSV</button>
+        <button class="btn" onclick="showQrModal()">📱 QR</button>
+        <button class="btn" onclick="downloadOfflineApp()">⬇️ DL</button>
         <button class="btn" onclick="toggleFullscreen()">⛶ 全画面</button>
         <button class="btn btn-help" onclick="showHelpModal()" title="ヘルプ・ショートカット">❓</button>
       </div>
@@ -413,6 +415,27 @@
     </div>
   </div>
 
+  <!-- QRコードモーダル -->
+  <div id="qr-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>📱 QRコードでデータ転送</h2>
+        <button class="modal-close" onclick="closeQrModal()" type="button">✕</button>
+      </div>
+      <div class="qr-content">
+        <p class="qr-info">スマホでQRコードを読み取ってデータを転送できます。</p>
+        <p class="qr-warning">※ データが大きい場合は複数のQRコードに分割されます。</p>
+        <div class="qr-nav">
+          <button class="btn" id="qr-prev" onclick="showPrevQr()">◀ 前へ</button>
+          <span id="qr-page">1 / 1</span>
+          <button class="btn" id="qr-next" onclick="showNextQr()">次へ ▶</button>
+        </div>
+        <div id="qr-code" class="qr-code-container"></div>
+        <p id="qr-status" class="qr-status"></p>
+      </div>
+    </div>
+  </div>
+
   <!-- 選択ヒント -->
   <div id="selection-hint" class="selection-hint">
     <span id="selection-info"></span>
@@ -427,6 +450,7 @@
 
   <!-- ライブラリ -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 
   <!-- アプリケーションスクリプト -->
   <script type="module" src="js/app.js?v=20251211-10"></script>

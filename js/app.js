@@ -1707,6 +1707,122 @@ document.addEventListener('keydown', function (e) {
         showHelpModal();
     }
 });
+// ========== QRコード機能 ==========
+let qrChunks = [];
+let currentQrIndex = 0;
+function showQrModal() {
+    if (rawData.length === 0) {
+        showToast('データがありません');
+        return;
+    }
+    const modal = document.getElementById('qr-modal');
+    modal.classList.add('show');
+    generateQrCodes();
+}
+function closeQrModal() {
+    document.getElementById('qr-modal').classList.remove('show');
+}
+function generateQrCodes() {
+    // 現在のフィルタリングされたデータをJSON化
+    const filtered = getFilteredData();
+    const exportData = {
+        version: 1,
+        date: new Date().toISOString(),
+        data: filtered.slice(0, 100) // 最大100件に制限
+    };
+    const jsonStr = JSON.stringify(exportData);
+    // QRコードの最大容量（約2KB程度を安全な上限に）
+    const maxChunkSize = 1800;
+    qrChunks = [];
+    for (let i = 0; i < jsonStr.length; i += maxChunkSize) {
+        qrChunks.push(jsonStr.slice(i, i + maxChunkSize));
+    }
+    currentQrIndex = 0;
+    renderQrCode();
+}
+function renderQrCode() {
+    const container = document.getElementById('qr-code');
+    container.innerHTML = '';
+    if (qrChunks.length === 0) {
+        container.innerHTML = '<p>データがありません</p>';
+        return;
+    }
+    const chunk = qrChunks[currentQrIndex];
+    const prefix = qrChunks.length > 1 ? `[${currentQrIndex + 1}/${qrChunks.length}]` : '';
+    const qrData = prefix + chunk;
+    // QRCodeライブラリでcanvasを生成
+    if (typeof QRCode !== 'undefined') {
+        QRCode.toCanvas(qrData, { width: 256, margin: 2 }, function (err, canvas) {
+            if (err) {
+                container.innerHTML = '<p>QRコード生成エラー</p>';
+                console.error(err);
+                return;
+            }
+            container.appendChild(canvas);
+        });
+    }
+    else {
+        container.innerHTML = '<p>QRコードライブラリが読み込まれていません</p>';
+    }
+    // ページ表示更新
+    document.getElementById('qr-page').textContent = `${currentQrIndex + 1} / ${qrChunks.length}`;
+    document.getElementById('qr-prev').disabled = currentQrIndex === 0;
+    document.getElementById('qr-next').disabled = currentQrIndex >= qrChunks.length - 1;
+    document.getElementById('qr-status').textContent = `データ: ${qrChunks.length > 1 ? '分割転送が必要です。全てのQRコードを順番に読み取ってください。' : '1回のスキャンで転送可能'}`;
+}
+function showPrevQr() {
+    if (currentQrIndex > 0) {
+        currentQrIndex--;
+        renderQrCode();
+    }
+}
+function showNextQr() {
+    if (currentQrIndex < qrChunks.length - 1) {
+        currentQrIndex++;
+        renderQrCode();
+    }
+}
+// ========== オフラインダウンロード機能 ==========
+async function downloadOfflineApp() {
+    showToast('オフライン版を生成中...');
+    try {
+        // 現在のHTMLを取得
+        const htmlRes = await fetch(window.location.href);
+        let html = await htmlRes.text();
+        // CSSを取得してインライン化
+        const cssRes = await fetch('css/style.css');
+        const css = await cssRes.text();
+        // XLSXライブラリを取得
+        const xlsxRes = await fetch('https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js');
+        const xlsxJs = await xlsxRes.text();
+        // QRCodeライブラリを取得
+        const qrRes = await fetch('https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js');
+        const qrJs = await qrRes.text();
+        // app.jsを取得
+        const appRes = await fetch('js/app.js');
+        const appJs = await appRes.text();
+        // HTMLを変換：外部リンクをインラインに置換
+        html = html.replace(/<link rel="stylesheet" href="css\/style.css">/, `<style>${css}</style>`);
+        html = html.replace(/<script src="https:\/\/cdn\.sheetjs\.com[^"]+"><\/script>/, `<script>${xlsxJs}<\/script>`);
+        html = html.replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/qrcode[^"]+"><\/script>/, `<script>${qrJs}<\/script>`);
+        html = html.replace(/<script type="module" src="js\/app\.js[^"]*"><\/script>/, `<script>${appJs}<\/script>`);
+        // ダウンロード
+        const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '発注台帳ビューアー_offline.html';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('オフライン版をダウンロードしました');
+    }
+    catch (err) {
+        console.error('オフラインダウンロードエラー:', err);
+        showToast('ダウンロードに失敗しました');
+    }
+}
 initDatabase().then(function () { renderSavedList(); }).catch(function (err) { console.error('DB初期化エラー:', err); });
 // Set up event listeners for buttons (more reliable than onclick attributes with ES modules)
 document.getElementById('saved-toggle')?.addEventListener('click', toggleSavedList);
@@ -1752,4 +1868,9 @@ window.toggleTagStats = toggleTagStats;
 window.updateFileChips = updateFileChips;
 window.initUI = initUI;
 window.showToast = showToast;
+window.showQrModal = showQrModal;
+window.closeQrModal = closeQrModal;
+window.showPrevQr = showPrevQr;
+window.showNextQr = showNextQr;
+window.downloadOfflineApp = downloadOfflineApp;
 //# sourceMappingURL=app.js.map
