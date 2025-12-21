@@ -1871,10 +1871,11 @@ async function downloadOfflineApp() {
 window.__EMBEDDED_DATA__ = ${JSON.stringify(embeddedData)};
 </script>`;
         // HTMLを変換：外部リンクをインラインに置換
-        html = html.replace(/<link rel="stylesheet" href="css\/style.css">/, `<style>${css}</style>`);
-        html = html.replace(/<script src="https:\/\/cdn\.sheetjs\.com[^"]+"><\/script>/, `<script>${xlsxJs}<\/script>`);
-        html = html.replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/qrcode[^"]+"><\/script>/, `<script>${qrJs}<\/script>`);
-        html = html.replace(/<script type="module" src="js\/app\.js[^"]*"><\/script>/, `${dataScript}\n<script>${appJs}<\/script>`);
+        // 注: replace()の第2引数に文字列を使うと$が特殊文字として解釈されるため関数を使用
+        html = html.replace(/<link rel="stylesheet" href="css\/style.css">/, function() { return '<style>' + css + '</style>'; });
+        html = html.replace(/<script src="https:\/\/cdn\.sheetjs\.com[^"]+"><\/script>/, function() { return '<script>' + xlsxJs + '<\/script>'; });
+        html = html.replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/qrcode[^"]+"><\/script>/, function() { return '<script>' + qrJs + '<\/script>'; });
+        html = html.replace(/<script type="module" src="js\/app\.js[^"]*"><\/script>/, function() { return dataScript + '\n<script>' + appJs + '<\/script>'; });
         // ダウンロード
         const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
         const url = URL.createObjectURL(blob);
