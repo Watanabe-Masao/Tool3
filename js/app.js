@@ -1443,6 +1443,7 @@ function parseHaibunFormat(wb, fileName) {
 
             // 品名を探す（列0-8の範囲で日本語文字を含む文字列）
             let foundProd = '';
+            let prodCol = -1; // 品名の列位置を記録
             for (let c = 0; c < Math.min(9, storeStartCol); c++) {
                 const cellStr = String(row[c] || '').trim();
                 if (!cellStr) continue;
@@ -1456,17 +1457,18 @@ function parseHaibunFormat(wb, fileName) {
 
                 if (isProductName) {
                     foundProd = cellStr;
+                    prodCol = c;
                     break;
                 }
             }
 
             // デバッグ: 行の状態を出力
             if (rowHasQty || foundProd) {
-                console.log('行' + r + ':', { 日付: curDate, 品名: foundProd, 数量あり: rowHasQty, 合計: totalQty });
+                console.log('行' + r + ':', { 日付: curDate, 品名: foundProd, 品名列: prodCol, 数量あり: rowHasQty, 合計: totalQty });
             }
 
             if (!rowHasQty) continue;
-            if (!foundProd) {
+            if (!foundProd || prodCol < 0) {
                 console.log('行' + r + ': 品名が見つからないためスキップ', row.slice(0, 9));
                 continue;
             }
@@ -1474,27 +1476,58 @@ function parseHaibunFormat(wb, fileName) {
             const prodName = extractProductName(foundProd);
             prods.add(prodName);
 
-            // 原価・売価・入数を探す
+            // 原価・売価・入数を品名位置を基準に相対的に取得
             let cost = null, unit = null;
             // 税抜価格は産地行から取得済み
             let price = curTaxExcludedPrice;
 
-            for (let c = 3; c < Math.min(storeStartCol, 10); c++) {
-                const cellStr = String(row[c] || '');
+            // 品名位置から相対的に探す（品名+3=原価、品名+5=入数が一般的）
+            // 原価: 品名の3列後
+            const costCol = prodCol + 3;
+            if (costCol < row.length) {
+                const costVal = Number(row[costCol]);
+                if (!isNaN(costVal) && costVal >= 10 && costVal < 5000) {
+                    cost = costVal;
+                    console.log('原価検出(相対):', cost, '列:', costCol);
+                }
+            }
+
+            // 入数: 品名の5列後
+            const unitCol = prodCol + 5;
+            if (unitCol < row.length) {
+                const unitStr = String(row[unitCol] || '');
                 // 全角数字を半角に変換
-                const normalizedStr = cellStr.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
-                // 入数パターン（半角・全角両対応）
+                const normalizedStr = unitStr.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
                 const unitMatch = normalizedStr.match(/(\d+)\s*(入|束|玉|袋|個|本|ｹｰｽ|ケース)/);
                 if (unitMatch) {
                     unit = parseInt(unitMatch[1]);
-                    console.log('入数検出:', unit, '元値:', cellStr, '列:', c);
-                    continue;
+                    console.log('入数検出(相対):', unit, '元値:', unitStr, '列:', unitCol);
                 }
-                // 数値（原価候補 - 最初に見つかった数値）
-                const numVal = parseFloat(normalizedStr.replace(/[^\d.]/g, ''));
-                if (!isNaN(numVal) && numVal >= 10 && numVal < 5000) {
+            }
+
+            // 相対位置で見つからなかった場合、従来の方法でフォールバック
+            if (cost === null || unit === null) {
+                for (let c = prodCol + 1; c < Math.min(storeStartCol, prodCol + 7); c++) {
+                    const cellStr = String(row[c] || '');
+                    const normalizedStr = cellStr.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+
+                    // 入数パターン
+                    if (unit === null) {
+                        const unitMatch = normalizedStr.match(/(\d+)\s*(入|束|玉|袋|個|本|ｹｰｽ|ケース)/);
+                        if (unitMatch) {
+                            unit = parseInt(unitMatch[1]);
+                            console.log('入数検出(フォールバック):', unit, '列:', c);
+                            continue;
+                        }
+                    }
+
+                    // 原価
                     if (cost === null) {
-                        cost = numVal;
+                        const numVal = parseFloat(normalizedStr.replace(/[^\d.]/g, ''));
+                        if (!isNaN(numVal) && numVal >= 10 && numVal < 5000) {
+                            cost = numVal;
+                            console.log('原価検出(フォールバック):', cost, '列:', c);
+                        }
                     }
                 }
             }
