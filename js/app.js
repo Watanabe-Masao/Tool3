@@ -1520,12 +1520,13 @@ function updateTooltip(e) {
             if (!p || !d)
                 return;
             const info = (productInfo[p] || {});
+            const unit = info.unit || 1;
             const q = currentPivot[p] ? (currentPivot[p][d] || 0) : 0;
             tQty += q;
             if (info.cost)
-                tCost += q * info.cost;
+                tCost += q * info.cost * unit;
             if (info.price)
-                tPrice += q * info.price;
+                tPrice += q * info.price * unit;
         });
         dateStrs = Array.from(cellCols).sort(function (a, b) { return a - b; }).map(function (c) { return currentDates[c]; }).filter(Boolean);
         prodNames = Array.from(cellRows).sort(function (a, b) { return a - b; }).map(function (r) { return currentProducts[r]; }).filter(Boolean);
@@ -1540,6 +1541,7 @@ function updateTooltip(e) {
             if (!p)
                 return;
             const info = (productInfo[p] || {});
+            const unit = info.unit || 1;
             cols.forEach(function (ci) {
                 const d = currentDates[ci];
                 if (!d)
@@ -1547,9 +1549,9 @@ function updateTooltip(e) {
                 const q = currentPivot[p] ? (currentPivot[p][d] || 0) : 0;
                 tQty += q;
                 if (info.cost)
-                    tCost += q * info.cost;
+                    tCost += q * info.cost * unit;
                 if (info.price)
-                    tPrice += q * info.price;
+                    tPrice += q * info.price * unit;
             });
         });
         hdr = selectedCols.size > 0 && selectedRows.size > 0 ? '📊 交点集計' : selectedCols.size > 0 ? '📅 期間集計' : '📦 品目集計';
@@ -1629,9 +1631,10 @@ function exportTagStats() {
         if (!t1 && !t2 && !t3)
             return;
         const info = (productInfo[p] || {});
+        const unit = info.unit || 1;
         const qty = currentPivot[p] ? (currentPivot[p].total || 0) : 0;
-        const cost = (info.cost || 0) * qty;
-        const price = (info.price || 0) * qty;
+        const cost = (info.cost || 0) * qty * unit;
+        const price = (info.price || 0) * qty * unit;
         const profit = price - cost;
         const margin = price > 0 ? ((profit / price) * 100).toFixed(1) + '%' : '0%';
         wsData.push([t1, t2, t3, qty, cost, price, profit, margin]);
