@@ -1027,6 +1027,17 @@ body {
   color: #e65100;
 }
 
+.data-table tr.no-delivery-row td.product {
+  background: #fff3e0;
+  color: #e65100;
+  font-weight: 600;
+}
+
+.data-table tr.no-delivery-row td.total-cell {
+  background: #fff3e0;
+  color: #e65100;
+}
+
 .data-table td.value.edited {
   background: #ffebee;
   font-weight: 700;

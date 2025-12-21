@@ -1267,7 +1267,8 @@ function updateTable() {
     products.forEach(function (p, ri) {
         const row = pivot[p], info = (productInfo[p] || {});
         const pEsc = p.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        html += '<tr data-row="' + ri + '" data-product="' + pEsc + '"><td class="product" data-row="' + ri + '">' + escapeHtml(p) + '</td>';
+        const rowClass = (showZero && row.total === 0) ? ' no-delivery-row' : '';
+        html += '<tr data-row="' + ri + '" data-product="' + pEsc + '" class="' + rowClass + '"><td class="product" data-row="' + ri + '">' + escapeHtml(p) + '</td>';
         if (showTag1)
             html += '<td class="tag tag1"><input type="text" value="' + escapeHtml(getTag(p, 1)) + '" onchange="setTag(\'' + pEsc + '\', 1, this.value)" placeholder="大"></td>';
         if (showTag2)
@@ -1289,7 +1290,7 @@ function updateTable() {
             var cellClass = 'value';
             if (v > 0)
                 cellClass += ' has-value';
-            else if (showZero)
+            else if (showZero && row.total === 0)
                 cellClass += ' no-delivery';
             if (isEdited)
                 cellClass += ' edited';
