@@ -157,10 +157,15 @@
         </label>
         <label>並び順:</label>
         <select id="sort-order" onchange="updateTable()">
-          <option value="name">品目名順</option>
+          <option value="name">品目名順 ▲</option>
+          <option value="name-desc">品目名順 ▼</option>
           <option value="tag">タグ順</option>
           <option value="qty-desc">数量多い順</option>
           <option value="qty-asc">数量少ない順</option>
+          <option value="cost-desc">原価高い順</option>
+          <option value="cost-asc">原価安い順</option>
+          <option value="price-desc">売価高い順</option>
+          <option value="price-asc">売価安い順</option>
         </select>
       </div>
     </div>

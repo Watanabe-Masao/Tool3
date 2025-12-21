@@ -1159,6 +1159,27 @@ function updateTagStats() {
     }
     tbody.innerHTML = html;
 }
+// ヘッダークリックでソート切り替え
+function toggleSort(key) {
+    const select = document.getElementById('sort-order');
+    const current = select.value;
+    // 同じキーをクリックした場合は昇順/降順を切り替え
+    if (current === key) {
+        select.value = key + '-desc';
+    } else if (current === key + '-desc') {
+        select.value = key;
+    } else if (current === key + '-asc') {
+        select.value = key + '-desc';
+    } else {
+        // 新しいキーの場合は降順から開始（数量、原価、売価は多い順が便利）
+        if (key === 'qty' || key === 'cost' || key === 'price') {
+            select.value = key + '-desc';
+        } else {
+            select.value = key;
+        }
+    }
+    updateTable();
+}
 function updateTable() {
     if (rawData.data.length === 0)
         return;
@@ -1208,6 +1229,21 @@ function updateTable() {
     else if (sortOrder === 'qty-asc') {
         products.sort(function (a, b) { return (pivot[a].total || 0) - (pivot[b].total || 0); });
     }
+    else if (sortOrder === 'cost-desc') {
+        products.sort(function (a, b) { return ((productInfo[b] || {}).cost || 0) - ((productInfo[a] || {}).cost || 0); });
+    }
+    else if (sortOrder === 'cost-asc') {
+        products.sort(function (a, b) { return ((productInfo[a] || {}).cost || 0) - ((productInfo[b] || {}).cost || 0); });
+    }
+    else if (sortOrder === 'price-desc') {
+        products.sort(function (a, b) { return ((productInfo[b] || {}).price || 0) - ((productInfo[a] || {}).price || 0); });
+    }
+    else if (sortOrder === 'price-asc') {
+        products.sort(function (a, b) { return ((productInfo[a] || {}).price || 0) - ((productInfo[b] || {}).price || 0); });
+    }
+    else if (sortOrder === 'name-desc') {
+        products.sort(function (a, b) { return b.localeCompare(a, 'ja'); });
+    }
     else {
         products.sort(function (a, b) { return a.localeCompare(b, 'ja'); });
     }
@@ -1234,21 +1270,26 @@ function updateTable() {
     document.getElementById('supplier-btn-text').textContent = selectedSuppliers.size === rawData.suppliers.length ? '全選択' : selectedSuppliers.size + '件';
     document.getElementById('file-btn-text').textContent = selectedFiles.size === loadedFiles.length ? '全選択' : selectedFiles.size + '件';
     const thead = document.querySelector('#data-table thead');
-    var hdr = '<tr><th class="product">品目名</th>';
+    const sortIndicator = function(key) {
+        if (sortOrder === key || sortOrder === key + '-asc') return ' ▲';
+        if (sortOrder === key + '-desc') return ' ▼';
+        return '';
+    };
+    var hdr = '<tr><th class="product sortable" onclick="toggleSort(\'name\')">品目名' + sortIndicator('name') + '</th>';
     if (showTag1)
-        hdr += '<th class="tag tag1">#大分類</th>';
+        hdr += '<th class="tag tag1 sortable" onclick="toggleSort(\'tag\')">#大分類' + (sortOrder === 'tag' ? ' ▲' : '') + '</th>';
     if (showTag2)
         hdr += '<th class="tag tag2">#中分類</th>';
     if (showTag3)
         hdr += '<th class="tag tag3">#小分類</th>';
     if (showCost)
-        hdr += '<th class="info-cost">原価</th>';
+        hdr += '<th class="info-cost sortable" onclick="toggleSort(\'cost\')">原価' + sortIndicator('cost') + '</th>';
     if (showPrice)
-        hdr += '<th class="info-price">売価</th>';
+        hdr += '<th class="info-price sortable" onclick="toggleSort(\'price\')">売価' + sortIndicator('price') + '</th>';
     if (showUnit)
         hdr += '<th class="info">入数</th>';
     dates.forEach(function (d, i) { hdr += '<th class="date-col" data-col="' + i + '">' + d + '</th>'; });
-    hdr += '<th class="total">計</th><th class="del-col">削除</th></tr>';
+    hdr += '<th class="total sortable" onclick="toggleSort(\'qty\')">計' + sortIndicator('qty') + '</th><th class="del-col">削除</th></tr>';
     thead.innerHTML = hdr;
     const tbody = document.querySelector('#data-table tbody');
     if (products.length === 0) {
@@ -1895,6 +1936,7 @@ window.deleteProduct = deleteProduct;
 window.editCell = editCell;
 window.toggleFullscreen = toggleFullscreen;
 window.updateTable = updateTable;
+window.toggleSort = toggleSort;
 window.toggleDropdown = toggleDropdown;
 window.toggleStore = toggleStore;
 window.toggleSupplier = toggleSupplier;

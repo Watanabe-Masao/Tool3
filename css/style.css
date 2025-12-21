@@ -946,6 +946,17 @@ body {
   box-shadow: 0 0 0 2px #007AFF;
 }
 
+.data-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.data-table th.sortable:hover {
+  background: #e8f4ff;
+  color: #0051D5;
+}
+
 .data-table td {
   padding: 4px 4px;
   border: 1px solid #e5e5e7;
