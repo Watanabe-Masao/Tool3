@@ -1853,7 +1853,7 @@ async function downloadOfflineApp() {
         const xlsxRes = await fetch('https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js');
         const xlsxJs = await xlsxRes.text();
         // QRCodeライブラリを取得
-        const qrRes = await fetch('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js');
+        const qrRes = await fetch('https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js');
         const qrJs = await qrRes.text();
         // app.jsを取得
         const appRes = await fetch('js/app.js');
