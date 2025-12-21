@@ -92,6 +92,9 @@
               <button onclick="clearAllFileFilters()">クリア</button>
             </div>
             <div id="file-filter-list" class="checkbox-list"></div>
+            <div class="dropdown-footer">
+              <button class="btn-ok" onclick="closeDropdown('file-filter')">OK</button>
+            </div>
           </div>
         </div>
 
@@ -107,6 +110,9 @@
               <button onclick="clearAllStores()">クリア</button>
             </div>
             <div id="store-list" class="checkbox-list"></div>
+            <div class="dropdown-footer">
+              <button class="btn-ok" onclick="closeDropdown('store')">OK</button>
+            </div>
           </div>
         </div>
 
@@ -122,6 +128,9 @@
               <button onclick="clearAllSuppliers()">クリア</button>
             </div>
             <div id="supplier-list" class="checkbox-list"></div>
+            <div class="dropdown-footer">
+              <button class="btn-ok" onclick="closeDropdown('supplier')">OK</button>
+            </div>
           </div>
         </div>
       </div>
@@ -522,7 +531,7 @@
 
         <!-- 大分類一覧テーブル -->
         <div class="tag-modal-section">
-          <h3>📁 大分類別集計</h3>
+          <h3>📁 大分類別集計 (クリックでフィルタ)</h3>
           <div class="tag-modal-table-wrap">
             <table class="tag-modal-table" id="modal-tag1-table">
               <thead>
@@ -534,6 +543,7 @@
                   <th class="col-num">粗利</th>
                   <th class="col-num">粗利率</th>
                   <th class="col-bar">構成比</th>
+                  <th class="col-num" title="構成比×粗利率÷100">相乗積</th>
                 </tr>
               </thead>
               <tbody id="modal-tag1-tbody"></tbody>
@@ -543,7 +553,7 @@
 
         <!-- 中分類一覧テーブル -->
         <div class="tag-modal-section">
-          <h3>📂 中分類別集計</h3>
+          <h3>📂 中分類別集計 (クリックでフィルタ)</h3>
           <div class="tag-modal-table-wrap">
             <table class="tag-modal-table" id="modal-tag2-table">
               <thead>
@@ -556,6 +566,7 @@
                   <th class="col-num">粗利</th>
                   <th class="col-num">粗利率</th>
                   <th class="col-bar">構成比</th>
+                  <th class="col-num" title="構成比×粗利率÷100">相乗積</th>
                 </tr>
               </thead>
               <tbody id="modal-tag2-tbody"></tbody>
@@ -579,6 +590,7 @@
                   <th class="col-num">粗利</th>
                   <th class="col-num">粗利率</th>
                   <th class="col-bar">構成比</th>
+                  <th class="col-num" title="構成比×粗利率÷100">相乗積</th>
                 </tr>
               </thead>
               <tbody id="modal-tag3-tbody"></tbody>

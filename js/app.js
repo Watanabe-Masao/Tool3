@@ -178,8 +178,15 @@ window.showTagStatsModal = showTagStatsModal;
 
 function closeTagStatsModal() {
     document.getElementById('tag-stats-modal').classList.remove('show');
+    modalSelectedTag1 = null; // フィルタをリセット
+    modalSelectedTag2 = null;
 }
 window.closeTagStatsModal = closeTagStatsModal;
+
+// モーダル用のフィルタ状態
+let modalSelectedTag1 = null;
+let modalSelectedTag2 = null;
+let modalTagData = { tag1Data: {}, tag2Data: {}, tag3Data: {}, grandTotal: { qty: 0, cost: 0, price: 0 } };
 
 function updateTagStatsModal() {
     // 集計データを収集
@@ -194,9 +201,9 @@ function updateTagStatsModal() {
         document.getElementById('modal-total-price').textContent = '¥0';
         document.getElementById('modal-total-profit').textContent = '¥0';
         document.getElementById('modal-total-margin').textContent = '0%';
-        document.getElementById('modal-tag1-tbody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;">データがありません</td></tr>';
-        document.getElementById('modal-tag2-tbody').innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;">データがありません</td></tr>';
-        document.getElementById('modal-tag3-tbody').innerHTML = '<tr><td colspan="9" style="text-align:center;color:#999;">データがありません</td></tr>';
+        document.getElementById('modal-tag1-tbody').innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;">データがありません</td></tr>';
+        document.getElementById('modal-tag2-tbody').innerHTML = '<tr><td colspan="9" style="text-align:center;color:#999;">データがありません</td></tr>';
+        document.getElementById('modal-tag3-tbody').innerHTML = '<tr><td colspan="10" style="text-align:center;color:#999;">データがありません</td></tr>';
         return;
     }
 
@@ -235,21 +242,54 @@ function updateTagStatsModal() {
         tag3Data[t3Key].price += price;
     });
 
+    // データをグローバルに保存
+    modalTagData = { tag1Data, tag2Data, tag3Data, grandTotal };
+
+    // フィルタをリセット
+    modalSelectedTag1 = null;
+    modalSelectedTag2 = null;
+
+    // テーブルを描画
+    renderTagStatsModalTables();
+}
+
+function renderTagStatsModalTables() {
+    const { tag1Data, tag2Data, tag3Data, grandTotal } = modalTagData;
+
     // 粗利計算関数
     function calcProfit(d) { return d.price - d.cost; }
-    function calcMargin(d) { return d.price > 0 ? ((d.price - d.cost) / d.price * 100).toFixed(1) : 0; }
+    function calcMargin(d) { return d.price > 0 ? ((d.price - d.cost) / d.price * 100) : 0; }
+    function calcComposition(d, total) { return total > 0 ? (d.qty / total * 100) : 0; }
+    // 相乗積 = 構成比 × 粗利率 / 100
+    function calcCrossRatio(d, total) {
+        const comp = calcComposition(d, total);
+        const margin = calcMargin(d);
+        return comp * margin / 100;
+    }
+
+    // フィルタに基づく基準値
+    let baseTotal = grandTotal;
+    if (modalSelectedTag1) {
+        baseTotal = tag1Data[modalSelectedTag1] || { qty: 0, cost: 0, price: 0 };
+    }
 
     // サマリーカード更新
-    document.getElementById('modal-total-qty').textContent = grandTotal.qty.toLocaleString();
-    document.getElementById('modal-total-cost').textContent = '¥' + grandTotal.cost.toLocaleString();
-    document.getElementById('modal-total-price').textContent = '¥' + grandTotal.price.toLocaleString();
-    document.getElementById('modal-total-profit').textContent = '¥' + calcProfit(grandTotal).toLocaleString();
-    document.getElementById('modal-total-margin').textContent = calcMargin(grandTotal) + '%';
+    document.getElementById('modal-total-qty').textContent = baseTotal.qty.toLocaleString();
+    document.getElementById('modal-total-cost').textContent = '¥' + baseTotal.cost.toLocaleString();
+    document.getElementById('modal-total-price').textContent = '¥' + baseTotal.price.toLocaleString();
+    document.getElementById('modal-total-profit').textContent = '¥' + calcProfit(baseTotal).toLocaleString();
+    document.getElementById('modal-total-margin').textContent = calcMargin(baseTotal).toFixed(1) + '%';
 
     // バーセルを生成する関数
     function renderBarCell(value, max) {
         const pct = max > 0 ? (value / max * 100) : 0;
         return '<div class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width:' + pct.toFixed(1) + '%"></div></div><span class="bar-text">' + pct.toFixed(1) + '%</span></div>';
+    }
+
+    // 相乗積セルを生成
+    function renderCrossRatioCell(value) {
+        const color = value >= 5 ? '#2e7d32' : value >= 2 ? '#1976d2' : '#86868b';
+        return '<span style="color:' + color + ';font-weight:600;">' + value.toFixed(2) + '</span>';
     }
 
     // 大分類テーブル
@@ -259,59 +299,129 @@ function updateTagStatsModal() {
         const d = tag1Data[t1];
         const profit = calcProfit(d);
         const profitClass = profit >= 0 ? 'positive' : 'negative';
-        html1 += '<tr>';
-        html1 += '<td class="col-name">' + escapeHtml(t1) + '</td>';
+        const isSelected = modalSelectedTag1 === t1;
+        const rowClass = isSelected ? 'selected-row' : '';
+        const crossRatio = calcCrossRatio(d, grandTotal.qty);
+        html1 += '<tr class="' + rowClass + '" onclick="filterTagModal1(\'' + escapeHtml(t1).replace(/'/g, "\\'") + '\')" style="cursor:pointer;">';
+        html1 += '<td class="col-name">' + (isSelected ? '✓ ' : '') + escapeHtml(t1) + '</td>';
         html1 += '<td class="col-num">' + d.qty.toLocaleString() + '</td>';
         html1 += '<td class="col-num">¥' + d.cost.toLocaleString() + '</td>';
         html1 += '<td class="col-num">¥' + d.price.toLocaleString() + '</td>';
         html1 += '<td class="col-num ' + profitClass + '">¥' + profit.toLocaleString() + '</td>';
-        html1 += '<td class="col-num">' + calcMargin(d) + '%</td>';
+        html1 += '<td class="col-num">' + calcMargin(d).toFixed(1) + '%</td>';
         html1 += '<td class="col-bar">' + renderBarCell(d.qty, grandTotal.qty) + '</td>';
+        html1 += '<td class="col-num">' + renderCrossRatioCell(crossRatio) + '</td>';
         html1 += '</tr>';
     });
     document.getElementById('modal-tag1-tbody').innerHTML = html1;
 
-    // 中分類テーブル
-    const tag2Sorted = Object.keys(tag2Data).sort((a, b) => tag2Data[b].qty - tag2Data[a].qty);
+    // 中分類テーブル（フィルタ適用）
+    let tag2Filtered = Object.keys(tag2Data);
+    if (modalSelectedTag1) {
+        tag2Filtered = tag2Filtered.filter(k => tag2Data[k].tag1 === modalSelectedTag1);
+    }
+    tag2Filtered.sort((a, b) => tag2Data[b].qty - tag2Data[a].qty);
+
     let html2 = '';
-    tag2Sorted.forEach(function (key) {
-        const d = tag2Data[key];
-        const profit = calcProfit(d);
-        const profitClass = profit >= 0 ? 'positive' : 'negative';
-        html2 += '<tr>';
-        html2 += '<td class="col-parent">' + escapeHtml(d.tag1) + '</td>';
-        html2 += '<td class="col-name">' + escapeHtml(d.tag2) + '</td>';
-        html2 += '<td class="col-num">' + d.qty.toLocaleString() + '</td>';
-        html2 += '<td class="col-num">¥' + d.cost.toLocaleString() + '</td>';
-        html2 += '<td class="col-num">¥' + d.price.toLocaleString() + '</td>';
-        html2 += '<td class="col-num ' + profitClass + '">¥' + profit.toLocaleString() + '</td>';
-        html2 += '<td class="col-num">' + calcMargin(d) + '%</td>';
-        html2 += '<td class="col-bar">' + renderBarCell(d.qty, grandTotal.qty) + '</td>';
-        html2 += '</tr>';
-    });
+    if (tag2Filtered.length === 0) {
+        html2 = '<tr><td colspan="9" style="text-align:center;color:#999;">データがありません</td></tr>';
+    } else {
+        tag2Filtered.forEach(function (key) {
+            const d = tag2Data[key];
+            const profit = calcProfit(d);
+            const profitClass = profit >= 0 ? 'positive' : 'negative';
+            const isSelected = modalSelectedTag2 === key;
+            const rowClass = isSelected ? 'selected-row' : '';
+            const crossRatio = calcCrossRatio(d, baseTotal.qty);
+            html2 += '<tr class="' + rowClass + '" onclick="filterTagModal2(\'' + key.replace(/'/g, "\\'") + '\')" style="cursor:pointer;">';
+            html2 += '<td class="col-parent">' + escapeHtml(d.tag1) + '</td>';
+            html2 += '<td class="col-name">' + (isSelected ? '✓ ' : '') + escapeHtml(d.tag2) + '</td>';
+            html2 += '<td class="col-num">' + d.qty.toLocaleString() + '</td>';
+            html2 += '<td class="col-num">¥' + d.cost.toLocaleString() + '</td>';
+            html2 += '<td class="col-num">¥' + d.price.toLocaleString() + '</td>';
+            html2 += '<td class="col-num ' + profitClass + '">¥' + profit.toLocaleString() + '</td>';
+            html2 += '<td class="col-num">' + calcMargin(d).toFixed(1) + '%</td>';
+            html2 += '<td class="col-bar">' + renderBarCell(d.qty, baseTotal.qty) + '</td>';
+            html2 += '<td class="col-num">' + renderCrossRatioCell(crossRatio) + '</td>';
+            html2 += '</tr>';
+        });
+    }
     document.getElementById('modal-tag2-tbody').innerHTML = html2;
 
-    // 小分類テーブル
-    const tag3Sorted = Object.keys(tag3Data).sort((a, b) => tag3Data[b].qty - tag3Data[a].qty);
+    // 小分類テーブル（フィルタ適用）
+    let tag3Filtered = Object.keys(tag3Data);
+    if (modalSelectedTag1) {
+        tag3Filtered = tag3Filtered.filter(k => tag3Data[k].tag1 === modalSelectedTag1);
+    }
+    if (modalSelectedTag2) {
+        const selectedT2 = tag2Data[modalSelectedTag2];
+        if (selectedT2) {
+            tag3Filtered = tag3Filtered.filter(k => tag3Data[k].tag1 === selectedT2.tag1 && tag3Data[k].tag2 === selectedT2.tag2);
+        }
+    }
+    tag3Filtered.sort((a, b) => tag3Data[b].qty - tag3Data[a].qty);
+
+    // 小分類の基準値（中分類選択時はその中分類の合計）
+    let tag3BaseTotal = baseTotal;
+    if (modalSelectedTag2 && tag2Data[modalSelectedTag2]) {
+        tag3BaseTotal = tag2Data[modalSelectedTag2];
+    }
+
     let html3 = '';
-    tag3Sorted.forEach(function (key) {
-        const d = tag3Data[key];
-        const profit = calcProfit(d);
-        const profitClass = profit >= 0 ? 'positive' : 'negative';
-        html3 += '<tr>';
-        html3 += '<td class="col-parent">' + escapeHtml(d.tag1) + '</td>';
-        html3 += '<td class="col-parent">' + escapeHtml(d.tag2) + '</td>';
-        html3 += '<td class="col-name">' + escapeHtml(d.tag3) + '</td>';
-        html3 += '<td class="col-num">' + d.qty.toLocaleString() + '</td>';
-        html3 += '<td class="col-num">¥' + d.cost.toLocaleString() + '</td>';
-        html3 += '<td class="col-num">¥' + d.price.toLocaleString() + '</td>';
-        html3 += '<td class="col-num ' + profitClass + '">¥' + profit.toLocaleString() + '</td>';
-        html3 += '<td class="col-num">' + calcMargin(d) + '%</td>';
-        html3 += '<td class="col-bar">' + renderBarCell(d.qty, grandTotal.qty) + '</td>';
-        html3 += '</tr>';
-    });
+    if (tag3Filtered.length === 0) {
+        html3 = '<tr><td colspan="10" style="text-align:center;color:#999;">データがありません</td></tr>';
+    } else {
+        tag3Filtered.forEach(function (key) {
+            const d = tag3Data[key];
+            const profit = calcProfit(d);
+            const profitClass = profit >= 0 ? 'positive' : 'negative';
+            const crossRatio = calcCrossRatio(d, tag3BaseTotal.qty);
+            html3 += '<tr>';
+            html3 += '<td class="col-parent">' + escapeHtml(d.tag1) + '</td>';
+            html3 += '<td class="col-parent">' + escapeHtml(d.tag2) + '</td>';
+            html3 += '<td class="col-name">' + escapeHtml(d.tag3) + '</td>';
+            html3 += '<td class="col-num">' + d.qty.toLocaleString() + '</td>';
+            html3 += '<td class="col-num">¥' + d.cost.toLocaleString() + '</td>';
+            html3 += '<td class="col-num">¥' + d.price.toLocaleString() + '</td>';
+            html3 += '<td class="col-num ' + profitClass + '">¥' + profit.toLocaleString() + '</td>';
+            html3 += '<td class="col-num">' + calcMargin(d).toFixed(1) + '%</td>';
+            html3 += '<td class="col-bar">' + renderBarCell(d.qty, tag3BaseTotal.qty) + '</td>';
+            html3 += '<td class="col-num">' + renderCrossRatioCell(crossRatio) + '</td>';
+            html3 += '</tr>';
+        });
+    }
     document.getElementById('modal-tag3-tbody').innerHTML = html3;
+
+    // セクションタイトルを更新
+    const h3Tag1 = document.querySelector('#modal-tag1-table').closest('.tag-modal-section').querySelector('h3');
+    const h3Tag2 = document.querySelector('#modal-tag2-table').closest('.tag-modal-section').querySelector('h3');
+    const h3Tag3 = document.querySelector('#modal-tag3-table').closest('.tag-modal-section').querySelector('h3');
+
+    h3Tag1.textContent = '📁 大分類別集計' + (modalSelectedTag1 ? '' : ' (クリックでフィルタ)');
+    h3Tag2.textContent = '📂 中分類別集計' + (modalSelectedTag1 ? ' [' + modalSelectedTag1 + ']' : '') + (modalSelectedTag2 ? '' : ' (クリックでフィルタ)');
+    h3Tag3.textContent = '🏷️ 小分類別集計' + (modalSelectedTag1 ? ' [' + modalSelectedTag1 + ']' : '') + (modalSelectedTag2 ? ' [' + tag2Data[modalSelectedTag2]?.tag2 + ']' : '');
 }
+
+function filterTagModal1(tag1) {
+    if (modalSelectedTag1 === tag1) {
+        modalSelectedTag1 = null; // 同じものをクリックで解除
+    } else {
+        modalSelectedTag1 = tag1;
+    }
+    modalSelectedTag2 = null; // 中分類フィルタをリセット
+    renderTagStatsModalTables();
+}
+window.filterTagModal1 = filterTagModal1;
+
+function filterTagModal2(key) {
+    if (modalSelectedTag2 === key) {
+        modalSelectedTag2 = null; // 同じものをクリックで解除
+    } else {
+        modalSelectedTag2 = key;
+    }
+    renderTagStatsModalTables();
+}
+window.filterTagModal2 = filterTagModal2;
 function showSaveModal() {
     if (loadedFiles.length === 0) {
         showToast('データがありません');
@@ -1246,6 +1356,7 @@ function initUI() {
 }
 function toggleDropdown(type) { const dd = document.getElementById(type + '-dropdown'), isOpen = dd.classList.contains('show'); document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.remove('show')); if (!isOpen)
     dd.classList.add('show'); }
+function closeDropdown(type) { const dd = document.getElementById(type + '-dropdown'); if (dd) dd.classList.remove('show'); }
 function toggleStore(s, cb) { cb.checked ? selectedStores.add(s) : selectedStores.delete(s); cb.parentElement.classList.toggle('selected', cb.checked); updateTable(); }
 function toggleSupplier(s, cb) { cb.checked ? selectedSuppliers.add(s) : selectedSuppliers.delete(s); cb.parentElement.classList.toggle('selected', cb.checked); updateTable(); }
 function selectAllStores() { selectedStores = new Set(rawData.stores); document.querySelectorAll('#store-list input').forEach(cb => { cb.checked = true; cb.parentElement.classList.add('selected'); }); updateTable(); }
@@ -2433,6 +2544,7 @@ window.toggleFullscreen = toggleFullscreen;
 window.updateTable = updateTable;
 window.toggleSort = toggleSort;
 window.toggleDropdown = toggleDropdown;
+window.closeDropdown = closeDropdown;
 window.toggleStore = toggleStore;
 window.toggleSupplier = toggleSupplier;
 window.selectAllStores = selectAllStores;
