@@ -1725,7 +1725,7 @@ function exportTagTemplate() {
 document.onclick = function (e) {
     if (!e.target.closest('.dropdown'))
         document.querySelectorAll('.dropdown-menu').forEach(function (d) { d.classList.remove('show'); });
-    if (!e.target.closest('.table-wrap') && !e.target.closest('.selection-tooltip') && !e.target.closest('.selection-hint'))
+    if (!e.target.closest('.table-scroll') && !e.target.closest('.selection-tooltip') && !e.target.closest('.selection-hint'))
         clearSelection();
 };
 // Keyboard shortcuts
