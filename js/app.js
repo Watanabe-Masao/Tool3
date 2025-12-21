@@ -1420,7 +1420,7 @@ function parseHaibunFormat(wb, fileName) {
                 // 列7または列8付近から税抜価格を探す
                 for (let c = 6; c < Math.min(10, row.length); c++) {
                     const numVal = Number(row[c]);
-                    if (numVal >= 10 && numVal < 5000 && Number.isInteger(numVal)) {
+                    if (numVal >= 10 && numVal < 50000 && Number.isInteger(numVal)) {
                         curTaxExcludedPrice = numVal;
                         console.log('税抜価格検出:', curTaxExcludedPrice, '列:', c, '行:', r);
                         break;
@@ -1503,7 +1503,7 @@ function parseHaibunFormat(wb, fileName) {
             const costCol = prodCol + 3;
             if (costCol < row.length) {
                 const costVal = Number(row[costCol]);
-                if (!isNaN(costVal) && costVal >= 10 && costVal < 5000) {
+                if (!isNaN(costVal) && costVal >= 10 && costVal < 50000) {
                     cost = costVal;
                     console.log('原価検出(相対):', cost, '列:', costCol);
                 }
@@ -1556,7 +1556,7 @@ function parseHaibunFormat(wb, fileName) {
                     // 原価
                     if (cost === null) {
                         const numVal = parseFloat(normalizedStr.replace(/[^\d.]/g, ''));
-                        if (!isNaN(numVal) && numVal >= 10 && numVal < 5000) {
+                        if (!isNaN(numVal) && numVal >= 10 && numVal < 50000) {
                             cost = numVal;
                             console.log('原価検出(フォールバック):', cost, '列:', c);
                         }
