@@ -1484,9 +1484,10 @@ function parseHaibunFormat(wb, fileName) {
                 // 全角数字を半角に変換
                 const normalizedStr = cellStr.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
                 // 入数パターン（半角・全角両対応）
-                const unitMatch = normalizedStr.match(/(\d+)\s*(入|束|玉|袋|個|本)/);
+                const unitMatch = normalizedStr.match(/(\d+)\s*(入|束|玉|袋|個|本|ｹｰｽ|ケース)/);
                 if (unitMatch) {
                     unit = parseInt(unitMatch[1]);
+                    console.log('入数検出:', unit, '元値:', cellStr, '列:', c);
                     continue;
                 }
                 // 数値（原価候補 - 最初に見つかった数値）
@@ -1497,6 +1498,8 @@ function parseHaibunFormat(wb, fileName) {
                     }
                 }
             }
+
+            console.log('商品情報:', foundProd, { 原価: cost, 売価: price, 入数: unit });
 
             // 税抜価格が取得できなかった場合のフォールバック
             if (price === null && cost !== null) {
