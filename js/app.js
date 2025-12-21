@@ -1481,14 +1481,16 @@ function parseHaibunFormat(wb, fileName) {
 
             for (let c = 3; c < Math.min(storeStartCol, 10); c++) {
                 const cellStr = String(row[c] || '');
-                // 入数パターン
-                const unitMatch = cellStr.match(/(\d+)\s*(入|束|玉|袋|個|本)/);
+                // 全角数字を半角に変換
+                const normalizedStr = cellStr.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+                // 入数パターン（半角・全角両対応）
+                const unitMatch = normalizedStr.match(/(\d+)\s*(入|束|玉|袋|個|本)/);
                 if (unitMatch) {
                     unit = parseInt(unitMatch[1]);
                     continue;
                 }
                 // 数値（原価候補 - 最初に見つかった数値）
-                const numVal = parseFloat(cellStr.replace(/[^\d.]/g, ''));
+                const numVal = parseFloat(normalizedStr.replace(/[^\d.]/g, ''));
                 if (!isNaN(numVal) && numVal >= 10 && numVal < 5000) {
                     if (cost === null) {
                         cost = numVal;
