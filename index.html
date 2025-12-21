@@ -66,7 +66,6 @@
         <button class="btn btn-primary" onclick="showSaveModal()">💾 保存</button>
         <button class="btn" onclick="printTable()">🖨️ 印刷</button>
         <button class="btn" onclick="exportToCSV()">📄 CSV</button>
-        <button class="btn" onclick="showTransferModal()">📤 転送</button>
         <button class="btn" onclick="downloadOfflineApp()">⬇️ DL</button>
         <button class="btn" onclick="toggleFullscreen()">⛶ 全画面</button>
         <button class="btn btn-help" onclick="showHelpModal()" title="ヘルプ・ショートカット">❓</button>
@@ -444,30 +443,6 @@
     <div class="tooltip-row">
       <span>値入率:</span>
       <span id="tooltip-margin">0%</span>
-    </div>
-  </div>
-
-  <!-- データ転送モーダル -->
-  <div id="transfer-modal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>📤 データ転送</h2>
-        <button class="modal-close" onclick="closeTransferModal()" type="button">✕</button>
-      </div>
-      <div class="transfer-content">
-        <div class="transfer-section">
-          <h3>📥 エクスポート（書き出し）</h3>
-          <p>現在のデータをJSONファイルとして保存します。編集内容も含まれます。</p>
-          <button class="btn btn-primary" onclick="exportToJSON()">💾 JSONファイルを保存</button>
-        </div>
-        <hr>
-        <div class="transfer-section">
-          <h3>📤 インポート（読み込み）</h3>
-          <p>以前エクスポートしたJSONファイルを読み込みます。</p>
-          <input type="file" id="json-import-input" accept=".json" onchange="importFromJSON(this)" style="display:none;">
-          <button class="btn" onclick="document.getElementById('json-import-input').click()">📂 JSONファイルを開く</button>
-        </div>
-      </div>
     </div>
   </div>
 

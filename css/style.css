@@ -1274,34 +1274,6 @@ body {
   color: #1d1d1f;
 }
 
-/* ========== データ転送モーダル ========== */
-.transfer-content {
-  padding: 16px;
-}
-
-.transfer-section {
-  margin-bottom: 16px;
-}
-
-.transfer-section h3 {
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 8px;
-  color: #1d1d1f;
-}
-
-.transfer-section p {
-  font-size: 12px;
-  color: #86868b;
-  margin-bottom: 12px;
-}
-
-.transfer-content hr {
-  border: none;
-  border-top: 1px solid #e5e5e7;
-  margin: 20px 0;
-}
-
 /* ========== 商品情報セクション ========== */
 .product-info-section {
   background: #f5f5f7;

@@ -1906,74 +1906,6 @@ document.addEventListener('keydown', function (e) {
         showHelpModal();
     }
 });
-// ========== データ転送機能（JSON） ==========
-function showTransferModal() {
-    document.getElementById('transfer-modal').classList.add('show');
-}
-function closeTransferModal() {
-    document.getElementById('transfer-modal').classList.remove('show');
-}
-function exportToJSON() {
-    if (rawData.data.length === 0) {
-        showToast('データがありません');
-        return;
-    }
-    const exportData = {
-        version: 2,
-        exportDate: new Date().toISOString(),
-        rawData: rawData,
-        loadedFiles: loadedFiles,
-        cellEdits: cellEdits,
-        productInfo: productInfo,
-        productTags: productTags
-    };
-    const jsonStr = JSON.stringify(exportData, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json; charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = '発注データ_' + new Date().toISOString().slice(0, 10) + '.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast('JSONファイルを保存しました');
-    closeTransferModal();
-}
-function importFromJSON(input) {
-    const file = input.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const data = JSON.parse(e.target.result);
-            if (!data.version || !data.rawData) {
-                showToast('無効なJSONファイルです');
-                return;
-            }
-            // データを復元
-            rawData = data.rawData;
-            loadedFiles = data.loadedFiles || [];
-            Object.assign(cellEdits, data.cellEdits || {});
-            Object.assign(productInfo, data.productInfo || {});
-            Object.assign(productTags, data.productTags || {});
-            // 全商品リストを再構築
-            allProducts = [...new Set(rawData.data.map(d => d.product))].sort();
-            // UIを更新
-            document.getElementById('drop-zone').style.display = 'none';
-            document.getElementById('main-content').style.display = 'block';
-            updateFileChips();
-            initUI();
-            showToast('データを読み込みました（' + rawData.data.length + '件）');
-            closeTransferModal();
-        } catch (err) {
-            console.error('JSONインポートエラー:', err);
-            showToast('ファイルの読み込みに失敗しました');
-        }
-    };
-    reader.readAsText(file);
-    input.value = ''; // リセット
-}
 // ========== ファイル順序設定機能 ==========
 let tempFileOrder = []; // モーダル内での一時的な順序
 function showFileOrderModal() {
@@ -2197,10 +2129,6 @@ window.toggleTagStats = toggleTagStats;
 window.updateFileChips = updateFileChips;
 window.initUI = initUI;
 window.showToast = showToast;
-window.showTransferModal = showTransferModal;
-window.closeTransferModal = closeTransferModal;
-window.exportToJSON = exportToJSON;
-window.importFromJSON = importFromJSON;
 window.showFileOrderModal = showFileOrderModal;
 window.closeFileOrderModal = closeFileOrderModal;
 window.applyFileOrder = applyFileOrder;
