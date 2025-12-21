@@ -1373,6 +1373,7 @@ function parseHaibunFormat(wb, fileName) {
 
         // データ行をパース
         let curDate = null;
+        let curTaxExcludedPrice = null; // 税抜価格（産地行から取得）
         let debugRowCount = 0;
 
         for (let r = headerRowIdx + 1; r < json.length; r++) {
@@ -1386,6 +1387,7 @@ function parseHaibunFormat(wb, fileName) {
             }
 
             // 日付を探す（12/21, 12/21(日)、またはExcelシリアル番号形式）
+            let foundDateInRow = false;
             for (let c = 0; c < Math.min(6, row.length); c++) {
                 const cellVal = row[c];
                 const cellStr = String(cellVal || '');
@@ -1394,6 +1396,7 @@ function parseHaibunFormat(wb, fileName) {
                 const dm = cellStr.match(/(\d{1,2})\/(\d{1,2})/);
                 if (dm) {
                     curDate = parseInt(dm[1]) + '/' + parseInt(dm[2]);
+                    foundDateInRow = true;
                     console.log('日付検出(文字列):', curDate, '行:', r);
                     break;
                 }
@@ -1406,8 +1409,22 @@ function parseHaibunFormat(wb, fileName) {
                     const m = excelDate.getMonth() + 1;
                     const d = excelDate.getDate();
                     curDate = m + '/' + d;
+                    foundDateInRow = true;
                     console.log('日付検出(Excel):', curDate, '元値:', numVal, '行:', r);
                     break;
+                }
+            }
+
+            // 日付がある行（産地行）から税抜価格を取得（列7付近）
+            if (foundDateInRow) {
+                // 列7または列8付近から税抜価格を探す
+                for (let c = 6; c < Math.min(10, row.length); c++) {
+                    const numVal = Number(row[c]);
+                    if (numVal >= 10 && numVal < 5000 && Number.isInteger(numVal)) {
+                        curTaxExcludedPrice = numVal;
+                        console.log('税抜価格検出:', curTaxExcludedPrice, '列:', c, '行:', r);
+                        break;
+                    }
                 }
             }
 
@@ -1458,7 +1475,10 @@ function parseHaibunFormat(wb, fileName) {
             prods.add(prodName);
 
             // 原価・売価・入数を探す
-            let cost = null, price = null, unit = null;
+            let cost = null, unit = null;
+            // 税抜価格は産地行から取得済み
+            let price = curTaxExcludedPrice;
+
             for (let c = 3; c < Math.min(storeStartCol, 10); c++) {
                 const cellStr = String(row[c] || '');
                 // 入数パターン
@@ -1467,17 +1487,19 @@ function parseHaibunFormat(wb, fileName) {
                     unit = parseInt(unitMatch[1]);
                     continue;
                 }
-                // 数値（原価・売価候補）
+                // 数値（原価候補 - 最初に見つかった数値）
                 const numVal = parseFloat(cellStr.replace(/[^\d.]/g, ''));
                 if (!isNaN(numVal) && numVal >= 10 && numVal < 5000) {
-                    if (cost === null) cost = numVal;
-                    else if (price === null) price = numVal;
+                    if (cost === null) {
+                        cost = numVal;
+                    }
                 }
             }
 
-            // 原価と売価の大小関係を確認
-            if (cost !== null && price !== null && cost > price) {
-                [cost, price] = [price, cost];
+            // 税抜価格が取得できなかった場合のフォールバック
+            if (price === null && cost !== null) {
+                // 原価に1.3程度をかけて推定（フォールバック）
+                price = Math.round(cost * 1.3);
             }
 
             if (!pInfo[prodName]) {
