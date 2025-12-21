@@ -1308,7 +1308,17 @@ function importTags(input) {
                 const prod = String(row[prodCol] || '').trim();
                 if (!prod)
                     continue;
-                const matchedProd = allProducts.find(p => p.indexOf(prod) >= 0 || prod.indexOf(p) >= 0);
+                // まず完全一致を試み、なければ部分一致にフォールバック
+                let matchedProd = allProducts.find(p => p === prod);
+                if (!matchedProd) {
+                    // 部分一致の場合は最も短い一致（最も具体的な一致）を優先
+                    const partialMatches = allProducts.filter(p => p.indexOf(prod) >= 0 || prod.indexOf(p) >= 0);
+                    if (partialMatches.length > 0) {
+                        // インポート名との文字数差が最も小さいものを選択
+                        partialMatches.sort((a, b) => Math.abs(a.length - prod.length) - Math.abs(b.length - prod.length));
+                        matchedProd = partialMatches[0];
+                    }
+                }
                 if (matchedProd) {
                     if (!productTags[matchedProd])
                         productTags[matchedProd] = {};
