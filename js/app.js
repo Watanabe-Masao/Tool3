@@ -77,6 +77,27 @@ async function loadData(id) {
     });
 }
 /**
+ * Update (overwrite) data in IndexedDB
+ */
+async function updateData(id, name, data) {
+    return new Promise((resolve, reject) => {
+        if (!db) {
+            reject(new Error('Database not initialized'));
+            return;
+        }
+        const transaction = db.transaction(STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.put({
+            id,
+            name,
+            savedAt: new Date().toISOString(),
+            ...data
+        });
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+/**
  * Delete data from IndexedDB
  */
 async function deleteData(id) {
@@ -128,7 +149,17 @@ function showSaveModal() {
         showToast('データがありません');
         return;
     }
-    document.getElementById('save-name').value = loadedFiles.map(f => f.name.replace(/\.[^.]+$/, '')).join(', ');
+    const infoEl = document.getElementById('current-save-info');
+    const overwriteBtn = document.getElementById('overwrite-btn');
+    if (currentSaveId && currentSaveName) {
+        infoEl.textContent = '現在のデータ: ' + currentSaveName;
+        document.getElementById('save-name').value = currentSaveName;
+        overwriteBtn.style.display = 'inline-block';
+    } else {
+        infoEl.textContent = '';
+        document.getElementById('save-name').value = loadedFiles.map(f => f.name.replace(/\.[^.]+$/, '')).join(', ');
+        overwriteBtn.style.display = 'none';
+    }
     document.getElementById('save-modal').classList.add('show');
 }
 function closeSaveModal() { document.getElementById('save-modal').classList.remove('show'); }
@@ -534,19 +565,39 @@ function saveCellEdit(product, date, newVal, td, originalVal) {
     }
     updateTable();
 }
-async function saveToDatabase() {
+// 現在読み込んでいる保存データのID（上書き保存用）
+let currentSaveId = null;
+let currentSaveName = null;
+
+async function saveToDatabase(overwrite = false) {
     const name = document.getElementById('save-name').value.trim();
     if (!name) {
         showToast('名前を入力してください');
         return;
     }
+    const savePayload = {
+        loadedFiles,
+        productInfo,
+        allProducts,
+        productTags,
+        rawData,
+        cellEdits: { ...cellEdits }
+    };
     try {
-        await saveData(name, { loadedFiles, productInfo, allProducts, productTags });
+        if (overwrite && currentSaveId) {
+            await updateData(currentSaveId, name, savePayload);
+            showToast('✅ 上書き保存しました');
+        } else {
+            const newId = await saveData(name, savePayload);
+            currentSaveId = newId;
+            currentSaveName = name;
+            showToast('✅ 新規保存しました');
+        }
         closeSaveModal();
-        showToast('✅ 保存しました');
         renderSavedList();
     }
     catch (e) {
+        console.error('保存エラー:', e);
         showToast('❌ 保存に失敗しました');
     }
 }
@@ -561,6 +612,11 @@ async function loadFromDB(id) {
         productInfo = data.productInfo || {};
         allProducts = data.allProducts || [];
         productTags = data.productTags || {};
+        rawData = data.rawData || { data: [], stores: [], products: [], dates: [], suppliers: [] };
+        Object.keys(cellEdits).forEach(k => delete cellEdits[k]);
+        Object.assign(cellEdits, data.cellEdits || {});
+        currentSaveId = id;
+        currentSaveName = data.name || '';
         mergeAllData();
         selectedFiles = new Set(loadedFiles.map(f => f.id));
         updateFileChips();

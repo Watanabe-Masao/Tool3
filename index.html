@@ -235,10 +235,12 @@
   <div id="save-modal" class="modal">
     <div class="modal-content">
       <h2>💾 データを保存</h2>
+      <div id="current-save-info" style="margin-bottom:10px;color:#666;font-size:0.9em;"></div>
       <label>保存名:</label>
       <input type="text" id="save-name" placeholder="例: 2024年1月分データ">
       <div class="modal-actions">
-        <button class="btn btn-primary" onclick="saveToDatabase()">ローカル保存</button>
+        <button class="btn btn-primary" onclick="saveToDatabase(false)">📁 新規保存</button>
+        <button id="overwrite-btn" class="btn btn-primary" onclick="saveToDatabase(true)" style="display:none;">💾 上書き保存</button>
         <button class="btn" onclick="closeSaveModal()">キャンセル</button>
       </div>
     </div>
