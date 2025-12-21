@@ -590,7 +590,8 @@ async function saveToDatabase(overwrite = false) {
         selectedSuppliers: Array.from(selectedSuppliers),
         sliderFromIdx: sliderFromIdx,
         sliderToIdx: sliderToIdx,
-        selectedFiles: Array.from(selectedFiles)
+        selectedFiles: Array.from(selectedFiles),
+        customFileOrder: [...customFileOrder]
     };
     const savePayload = {
         loadedFiles,
@@ -652,6 +653,8 @@ async function loadFromDB(id) {
             if (ds.sortOrder2 !== undefined) document.getElementById('sort-order2').value = ds.sortOrder2;
             // 選択ファイル
             selectedFiles = ds.selectedFiles ? new Set(ds.selectedFiles) : new Set(loadedFiles.map(f => f.id));
+            // ファイル順序
+            customFileOrder = ds.customFileOrder || loadedFiles.map(f => f.id);
             // 店舗・業者の選択
             selectedStores = ds.selectedStores ? new Set(ds.selectedStores) : new Set(rawData.stores);
             selectedSuppliers = ds.selectedSuppliers ? new Set(ds.selectedSuppliers) : new Set(rawData.suppliers);
@@ -714,6 +717,8 @@ function showToast(msg) { const t = document.getElementById('toast'); t.textCont
 // ============================================================================
 /** Loaded Excel files */
 let loadedFiles = [];
+/** Custom file order for sorting (array of file IDs) */
+let customFileOrder = [];
 /** Raw data from all files */
 let rawData = {
     data: [],
@@ -863,6 +868,13 @@ function finishLoading() {
     }
     mergeAllData();
     selectedFiles = new Set(loadedFiles.map(f => f.id));
+    // 新規ファイルをcustomFileOrderに追加
+    const existingIds = new Set(customFileOrder);
+    loadedFiles.forEach(f => {
+        if (!existingIds.has(f.id)) {
+            customFileOrder.push(f.id);
+        }
+    });
     updateFileChips();
     initUI();
     document.getElementById('files-bar').classList.add('show');
@@ -1017,12 +1029,13 @@ function updateFileChips() {
 function updateFileFilterList() {
     document.getElementById('file-filter-list').innerHTML = loadedFiles.map(f => '<label class="checkbox-item ' + (selectedFiles.has(f.id) ? 'selected' : '') + '"><input type="checkbox" ' + (selectedFiles.has(f.id) ? 'checked' : '') + ' onchange="toggleFileFilter(\'' + f.id + '\',this)"> ' + escapeHtml(f.name) + '</label>').join('');
 }
-function removeFile(id) { loadedFiles = loadedFiles.filter(f => f.id != id); selectedFiles.delete(id); if (loadedFiles.length === 0) {
+function removeFile(id) { loadedFiles = loadedFiles.filter(f => f.id != id); selectedFiles.delete(id); customFileOrder = customFileOrder.filter(fid => fid != id); if (loadedFiles.length === 0) {
     clearAllFiles();
     return;
 } mergeAllData(); updateFileChips(); initUI(); document.getElementById('file-filter-panel').style.display = loadedFiles.length > 1 ? 'block' : 'none'; }
 function clearAllFiles() {
     loadedFiles = [];
+    customFileOrder = [];
     rawData = { data: [], stores: [], products: [], dates: [], suppliers: [] };
     productInfo = {};
     productTags = {};
@@ -1943,6 +1956,112 @@ function importFromJSON(input) {
     reader.readAsText(file);
     input.value = ''; // リセット
 }
+// ========== ファイル順序設定機能 ==========
+let tempFileOrder = []; // モーダル内での一時的な順序
+function showFileOrderModal() {
+    if (loadedFiles.length === 0) {
+        showToast('ファイルが読み込まれていません');
+        return;
+    }
+    // カスタム順序が未設定なら、現在のloadedFilesの順序を使用
+    if (customFileOrder.length === 0) {
+        customFileOrder = loadedFiles.map(f => f.id);
+    }
+    tempFileOrder = [...customFileOrder];
+    renderFileOrderList();
+    document.getElementById('file-order-modal').classList.add('show');
+}
+function closeFileOrderModal() {
+    document.getElementById('file-order-modal').classList.remove('show');
+}
+function renderFileOrderList() {
+    const list = document.getElementById('file-order-list');
+    list.innerHTML = tempFileOrder.map((fileId, idx) => {
+        const file = loadedFiles.find(f => f.id === fileId);
+        const name = file ? file.name : fileId;
+        return '<div class="file-order-item" draggable="true" data-file-id="' + fileId + '">' +
+            '<span class="order-num">' + (idx + 1) + '</span>' +
+            '<span class="file-name">' + escapeHtml(name) + '</span>' +
+            '<span class="drag-handle">☰</span>' +
+            '</div>';
+    }).join('');
+    // ドラッグ&ドロップイベントを設定
+    setupFileOrderDragDrop();
+}
+function setupFileOrderDragDrop() {
+    const items = document.querySelectorAll('.file-order-item');
+    let draggedItem = null;
+    items.forEach(item => {
+        item.addEventListener('dragstart', function(e) {
+            draggedItem = this;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+        item.addEventListener('dragend', function() {
+            this.classList.remove('dragging');
+            document.querySelectorAll('.file-order-item').forEach(i => i.classList.remove('drag-over'));
+            draggedItem = null;
+        });
+        item.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (this !== draggedItem) {
+                this.classList.add('drag-over');
+            }
+        });
+        item.addEventListener('dragleave', function() {
+            this.classList.remove('drag-over');
+        });
+        item.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.classList.remove('drag-over');
+            if (draggedItem && this !== draggedItem) {
+                const fromId = draggedItem.dataset.fileId;
+                const toId = this.dataset.fileId;
+                const fromIdx = tempFileOrder.indexOf(fromId);
+                const toIdx = tempFileOrder.indexOf(toId);
+                // 順序を入れ替え
+                tempFileOrder.splice(fromIdx, 1);
+                tempFileOrder.splice(toIdx, 0, fromId);
+                renderFileOrderList();
+            }
+        });
+    });
+}
+function applyFileOrder() {
+    customFileOrder = [...tempFileOrder];
+    // allProductsの順序を更新（ファイル順に並び替え）
+    rebuildProductOrderByFiles();
+    closeFileOrderModal();
+    updateTable();
+    showToast('ファイル順序を適用しました');
+}
+function rebuildProductOrderByFiles() {
+    // customFileOrderに基づいてallProductsを再構築
+    const orderedProducts = [];
+    const seen = new Set();
+    // ファイルIDからファイル名を取得するマップ
+    const fileIdToName = {};
+    loadedFiles.forEach(f => { fileIdToName[f.id] = f.name; });
+    customFileOrder.forEach(fileId => {
+        const fileName = fileIdToName[fileId];
+        if (!fileName) return;
+        rawData.data.forEach(item => {
+            if (item.fileName === fileName && !seen.has(item.product)) {
+                orderedProducts.push(item.product);
+                seen.add(item.product);
+            }
+        });
+    });
+    // カスタム順序にないファイルの商品も追加
+    rawData.data.forEach(item => {
+        if (!seen.has(item.product)) {
+            orderedProducts.push(item.product);
+            seen.add(item.product);
+        }
+    });
+    allProducts = orderedProducts;
+}
 // ========== オフラインダウンロード機能 ==========
 async function downloadOfflineApp() {
     showToast('オフライン版を生成中...');
@@ -2063,5 +2182,8 @@ window.showTransferModal = showTransferModal;
 window.closeTransferModal = closeTransferModal;
 window.exportToJSON = exportToJSON;
 window.importFromJSON = importFromJSON;
+window.showFileOrderModal = showFileOrderModal;
+window.closeFileOrderModal = closeFileOrderModal;
+window.applyFileOrder = applyFileOrder;
 window.downloadOfflineApp = downloadOfflineApp;
 //# sourceMappingURL=app.js.map

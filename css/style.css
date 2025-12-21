@@ -1871,3 +1871,74 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.3);
 }
+
+/* ========== ファイル順序設定 ========== */
+.files-bar-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.file-order-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.file-order-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  background: white;
+  border-bottom: 1px solid #eee;
+  cursor: grab;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.file-order-item:last-child {
+  border-bottom: none;
+}
+
+.file-order-item:hover {
+  background: #f5f5f7;
+}
+
+.file-order-item.dragging {
+  opacity: 0.5;
+  background: #e3f2fd;
+}
+
+.file-order-item.drag-over {
+  border-top: 2px solid #007AFF;
+}
+
+.file-order-item .order-num {
+  width: 28px;
+  height: 28px;
+  background: #007AFF;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 12px;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.file-order-item .file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-order-item .drag-handle {
+  color: #999;
+  font-size: 16px;
+  margin-left: 8px;
+}

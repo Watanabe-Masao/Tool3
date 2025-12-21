@@ -40,7 +40,10 @@
     <div id="files-bar-body" class="files-bar-body">
       <div id="file-chips" class="file-chips"></div>
       <input type="file" id="file-input-mini" accept=".xls,.xlsx" multiple style="display:none;">
-      <button class="btn-add-file" onclick="document.getElementById('file-input-mini').click()">➕ ファイル追加</button>
+      <div class="files-bar-actions">
+        <button class="btn-add-file" onclick="document.getElementById('file-input-mini').click()">➕ ファイル追加</button>
+        <button class="btn-add-file" onclick="showFileOrderModal()">🔢 順序設定</button>
+      </div>
     </div>
   </div>
 
@@ -464,6 +467,22 @@
           <input type="file" id="json-import-input" accept=".json" onchange="importFromJSON(this)" style="display:none;">
           <button class="btn" onclick="document.getElementById('json-import-input').click()">📂 JSONファイルを開く</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ファイル順序モーダル -->
+  <div id="file-order-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>🔢 ファイル順序設定</h2>
+        <button class="modal-close" onclick="closeFileOrderModal()" type="button">✕</button>
+      </div>
+      <p style="margin-bottom:10px;color:#666;">ドラッグで順序を変更できます。この順序で「ファイル順」ソートが適用されます。</p>
+      <div id="file-order-list" class="file-order-list"></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="applyFileOrder()">✓ 適用</button>
+        <button class="btn" onclick="closeFileOrderModal()">キャンセル</button>
       </div>
     </div>
   </div>
