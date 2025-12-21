@@ -1359,7 +1359,9 @@ function parseHaibunFormat(wb, fileName) {
                     break;
                 }
                 if (/^\d+$/.test(code)) {
-                    storeCols.push({ col: c, code: code });
+                    // 先頭ゼロを除去して正規化（01→1, 02→2）
+                    const normalizedCode = String(parseInt(code, 10));
+                    storeCols.push({ col: c, code: normalizedCode });
                 }
             }
         }
