@@ -215,6 +215,7 @@
       <div class="tag-stats-header">
         <h3>📊 タグ別集計</h3>
         <div class="tag-stats-actions">
+          <button class="btn-sm" onclick="showTagStatsModal()">🔍 詳細表示</button>
           <label class="file-label">
             📥 インポート
             <input type="file" accept=".xlsx,.xls,.csv" onchange="importTags(this)" style="display:none;">
@@ -250,9 +251,10 @@
     </div>
 
     <!-- データテーブル -->
-    <div class="table-container">
+    <div id="table-container" class="table-container">
       <div class="table-help">
         💡 ヒント: セルをダブルクリックで編集 | 列/行ヘッダーをドラッグで選択 | ❓ボタンで詳細ヘルプ
+        <button class="btn-fullscreen" onclick="toggleTableFullscreen()">⛶ 全画面</button>
       </div>
       <div id="table-scroll" class="table-scroll">
         <div id="no-data" class="no-data">データがありません</div>
@@ -467,6 +469,126 @@
       <div class="modal-actions">
         <button class="btn btn-primary" onclick="applyFileOrder()">✓ 適用</button>
         <button class="btn" onclick="closeFileOrderModal()">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- タグ統計詳細モーダル -->
+  <div id="tag-stats-modal" class="modal">
+    <div class="modal-content modal-fullscreen">
+      <div class="modal-header">
+        <h2>📊 タグ別集計 - 詳細分析</h2>
+        <button class="modal-close" onclick="closeTagStatsModal()" type="button">✕</button>
+      </div>
+      <div class="tag-modal-body">
+        <!-- 総合サマリー -->
+        <div class="tag-modal-summary">
+          <div class="tag-modal-summary-card total">
+            <div class="card-icon">📦</div>
+            <div class="card-content">
+              <div class="card-label">総数量</div>
+              <div class="card-value" id="modal-total-qty">0</div>
+            </div>
+          </div>
+          <div class="tag-modal-summary-card cost">
+            <div class="card-icon">💰</div>
+            <div class="card-content">
+              <div class="card-label">原価合計</div>
+              <div class="card-value" id="modal-total-cost">¥0</div>
+            </div>
+          </div>
+          <div class="tag-modal-summary-card price">
+            <div class="card-icon">💵</div>
+            <div class="card-content">
+              <div class="card-label">売価合計</div>
+              <div class="card-value" id="modal-total-price">¥0</div>
+            </div>
+          </div>
+          <div class="tag-modal-summary-card profit">
+            <div class="card-icon">📈</div>
+            <div class="card-content">
+              <div class="card-label">粗利合計</div>
+              <div class="card-value" id="modal-total-profit">¥0</div>
+            </div>
+          </div>
+          <div class="tag-modal-summary-card margin">
+            <div class="card-icon">%</div>
+            <div class="card-content">
+              <div class="card-label">粗利率</div>
+              <div class="card-value" id="modal-total-margin">0%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 大分類一覧テーブル -->
+        <div class="tag-modal-section">
+          <h3>📁 大分類別集計</h3>
+          <div class="tag-modal-table-wrap">
+            <table class="tag-modal-table" id="modal-tag1-table">
+              <thead>
+                <tr>
+                  <th class="col-name">大分類</th>
+                  <th class="col-num">数量</th>
+                  <th class="col-num">原価</th>
+                  <th class="col-num">売価</th>
+                  <th class="col-num">粗利</th>
+                  <th class="col-num">粗利率</th>
+                  <th class="col-bar">構成比</th>
+                </tr>
+              </thead>
+              <tbody id="modal-tag1-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 中分類一覧テーブル -->
+        <div class="tag-modal-section">
+          <h3>📂 中分類別集計</h3>
+          <div class="tag-modal-table-wrap">
+            <table class="tag-modal-table" id="modal-tag2-table">
+              <thead>
+                <tr>
+                  <th class="col-parent">大分類</th>
+                  <th class="col-name">中分類</th>
+                  <th class="col-num">数量</th>
+                  <th class="col-num">原価</th>
+                  <th class="col-num">売価</th>
+                  <th class="col-num">粗利</th>
+                  <th class="col-num">粗利率</th>
+                  <th class="col-bar">構成比</th>
+                </tr>
+              </thead>
+              <tbody id="modal-tag2-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 小分類一覧テーブル -->
+        <div class="tag-modal-section">
+          <h3>🏷️ 小分類別集計</h3>
+          <div class="tag-modal-table-wrap">
+            <table class="tag-modal-table" id="modal-tag3-table">
+              <thead>
+                <tr>
+                  <th class="col-parent">大分類</th>
+                  <th class="col-parent">中分類</th>
+                  <th class="col-name">小分類</th>
+                  <th class="col-num">数量</th>
+                  <th class="col-num">原価</th>
+                  <th class="col-num">売価</th>
+                  <th class="col-num">粗利</th>
+                  <th class="col-num">粗利率</th>
+                  <th class="col-bar">構成比</th>
+                </tr>
+              </thead>
+              <tbody id="modal-tag3-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="exportTagStats()">📊 Excel出力</button>
+        <button class="btn" onclick="closeTagStatsModal()">閉じる</button>
       </div>
     </div>
   </div>
