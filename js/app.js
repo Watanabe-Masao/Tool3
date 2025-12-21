@@ -1251,9 +1251,25 @@ function parseHaibunFormat(wb, fileName) {
     const pInfo = {};
     const prods = new Set();
 
+    console.log('=== parseHaibunFormat開始 ===', fileName);
+    console.log('シート一覧:', wb.SheetNames);
+
     wb.SheetNames.forEach((sn) => {
+        console.log('--- シート処理:', sn, '---');
         const json = window.XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: '' });
-        if (json.length < 8) return;
+        console.log('行数:', json.length);
+
+        if (json.length < 8) {
+            console.log('行数不足(8未満)でスキップ');
+            return;
+        }
+
+        // 最初の10行を出力
+        console.log('先頭10行のデータ:');
+        for (let r = 0; r < Math.min(10, json.length); r++) {
+            const row = json[r] || [];
+            console.log('行' + r + ':', row.slice(0, 12).map(c => String(c || '').substring(0, 8)));
+        }
 
         // 配分表形式かどうかを検出
         let isHaibun = false;
@@ -1263,43 +1279,58 @@ function parseHaibunFormat(wb, fileName) {
             const rowStr = (json[r] || []).join('');
             if (rowStr.indexOf('配分') >= 0 || rowStr.indexOf('商品連絡書') >= 0) {
                 isHaibun = true;
+                console.log('配分/商品連絡書キーワード発見 行:', r);
             }
-            // ヘッダー行を探す
+            // ヘッダー行を探す（納品日を含む行）
             const row = json[r] || [];
-            for (let c = 0; c < Math.min(10, row.length); c++) {
+            for (let c = 0; c < Math.min(15, row.length); c++) {
                 const cell = String(row[c] || '').trim();
                 if (cell === '納品日' || cell === '納品' || cell.indexOf('納品日') >= 0) {
                     headerRowIdx = r;
+                    console.log('納品日発見 行:', r, '列:', c, '値:', cell);
                     break;
                 }
             }
             if (headerRowIdx >= 0) break;
         }
 
-        console.log('配分表検出:', { isHaibun, headerRowIdx, sheetName: sn });
+        console.log('検出結果:', { isHaibun, headerRowIdx });
 
-        if (!isHaibun && headerRowIdx < 0) return;
-        // 配分が見つかった場合、ヘッダー行がなくても店舗コード行を探す
+        if (!isHaibun && headerRowIdx < 0) {
+            console.log('配分形式でなく、納品日も見つからないのでスキップ');
+            return;
+        }
+
+        // ヘッダー行がまだ見つからない場合、数字の並びから店舗コード行を探す
         if (headerRowIdx < 0) {
-            for (let r = 5; r < Math.min(12, json.length); r++) {
+            console.log('ヘッダー行を数字列から探索...');
+            for (let r = 4; r < Math.min(15, json.length); r++) {
                 const row = json[r] || [];
                 let numCount = 0;
-                for (let c = 8; c < Math.min(50, row.length); c++) {
-                    if (/^\d{1,3}$/.test(String(row[c] || '').trim())) numCount++;
+                for (let c = 5; c < Math.min(60, row.length); c++) {
+                    const cell = String(row[c] || '').trim();
+                    if (/^\d{1,3}$/.test(cell)) numCount++;
                 }
-                if (numCount >= 5) {
+                console.log('行' + r + ': 店舗コード候補数=' + numCount);
+                if (numCount >= 3) {
                     headerRowIdx = r;
+                    console.log('行' + r + 'をヘッダー行として採用');
                     break;
                 }
             }
         }
 
-        if (headerRowIdx < 0) return;
+        if (headerRowIdx < 0) {
+            console.log('ヘッダー行が見つからないためスキップ');
+            return;
+        }
 
         sheets.push(sn);
 
         // ヘッダー行から店舗コードを取得
         const hdrRow = json[headerRowIdx] || [];
+        console.log('ヘッダー行(行' + headerRowIdx + '):', hdrRow.slice(0, 25));
+
         const storeCols = [];
         let storeStartCol = -1;
 
@@ -1311,9 +1342,10 @@ function parseHaibunFormat(wb, fileName) {
             if (cell === '納品日' || cell === '納品') {
                 colDate = c;
             }
-            // 店舗コード列の検出（2-3桁の数字）
-            if (/^\d{1,3}$/.test(cell) && storeStartCol < 0 && c >= 6) {
+            // 店舗コード列の検出（1-3桁の数字）
+            if (/^\d{1,3}$/.test(cell) && storeStartCol < 0 && c >= 5) {
                 storeStartCol = c;
+                console.log('店舗コード開始: 列' + c, '値:', cell);
             }
         }
 
@@ -1322,16 +1354,22 @@ function parseHaibunFormat(wb, fileName) {
         if (storeStartCol > 0) {
             for (let c = storeStartCol; c < hdrRow.length; c++) {
                 const code = String(hdrRow[c] || '').trim();
-                if (code === '合計' || code === '計' || code.indexOf('納品') >= 0 || code.indexOf('売') >= 0) break;
+                if (code === '合計' || code === '計' || code.indexOf('納品') >= 0) {
+                    console.log('合計列で終了:', c, code);
+                    break;
+                }
                 if (/^\d+$/.test(code)) {
                     storeCols.push({ col: c, code: code });
                 }
             }
         }
 
-        console.log('検出された店舗数:', storeCols.length, storeCols.slice(0, 5));
+        console.log('検出された店舗:', storeCols.length, '件', storeCols.slice(0, 8).map(s => s.code));
 
-        if (storeCols.length === 0) return;
+        if (storeCols.length === 0) {
+            console.log('店舗コードが見つからないためスキップ');
+            return;
+        }
 
         // データ行をパース
         let curDate = null;
