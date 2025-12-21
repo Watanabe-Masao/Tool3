@@ -1518,24 +1518,36 @@ function parseHaibunFormat(wb, fileName) {
                 const normalizedStr = unitStr
                     .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
                     .replace(/[Ａ-Ｚａ-ｚ]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
-                // 単位付きパターン（8入、10束、3K、3Kgなど）
-                const unitMatch = normalizedStr.match(/(\d+)\s*(入|束|玉|袋|個|本|ｹｰｽ|ケース|[Kk][Gg]?|キロ|[Gg])/i);
-                if (unitMatch) {
-                    unit = parseInt(unitMatch[1]);
-                    const unitSuffix = unitMatch[2].toLowerCase();
-                    // Kg/キロの場合は重量単位としてマーク
-                    if (unitSuffix === 'k' || unitSuffix === 'kg' || unitSuffix === 'キロ') {
-                        unitType = 'kg';
-                    } else if (unitSuffix === 'g') {
-                        unitType = 'g';
-                    }
-                    console.log('入数検出(相対・単位付):', unit, unitType, '元値:', unitStr, '列:', unitCol);
+
+                console.log('入数セル解析:', { 元値: unitStr, 変換後: normalizedStr, 列: unitCol });
+
+                // Kg/K/キロのパターンを先にチェック
+                const kgMatch = normalizedStr.match(/(\d+)\s*([Kk][Gg]?|キロ|ｷﾛ)/);
+                if (kgMatch) {
+                    unit = parseInt(kgMatch[1]);
+                    unitType = 'kg';
+                    console.log('入数検出(Kg単位):', unit, 'Kg', '元値:', unitStr);
                 } else {
-                    // 数字のみのパターン（1, 28など）
-                    const numOnly = parseInt(normalizedStr.replace(/[^\d]/g, ''));
-                    if (!isNaN(numOnly) && numOnly >= 1 && numOnly <= 100) {
-                        unit = numOnly;
-                        console.log('入数検出(相対・数字のみ):', unit, '元値:', unitStr, '列:', unitCol);
+                    // gのみのパターン
+                    const gMatch = normalizedStr.match(/(\d+)\s*[Gg]/);
+                    if (gMatch) {
+                        unit = parseInt(gMatch[1]);
+                        unitType = 'g';
+                        console.log('入数検出(g単位):', unit, 'g', '元値:', unitStr);
+                    } else {
+                        // 単位付きパターン（8入、10束など）
+                        const unitMatch = normalizedStr.match(/(\d+)\s*(入|束|玉|袋|個|本|ｹｰｽ|ケース)/);
+                        if (unitMatch) {
+                            unit = parseInt(unitMatch[1]);
+                            console.log('入数検出(相対・単位付):', unit, '元値:', unitStr, '列:', unitCol);
+                        } else {
+                            // 数字のみのパターン（1, 28など）
+                            const numOnly = parseInt(normalizedStr.replace(/[^\d]/g, ''));
+                            if (!isNaN(numOnly) && numOnly >= 1 && numOnly <= 100) {
+                                unit = numOnly;
+                                console.log('入数検出(相対・数字のみ):', unit, '元値:', unitStr, '列:', unitCol);
+                            }
+                        }
                     }
                 }
             }
@@ -1550,16 +1562,27 @@ function parseHaibunFormat(wb, fileName) {
 
                     // 入数パターン（単位付きまたは数字のみ）
                     if (unit === null) {
-                        const unitMatch = normalizedStr.match(/(\d+)\s*(入|束|玉|袋|個|本|ｹｰｽ|ケース|[Kk][Gg]?|キロ|[Gg])/i);
+                        // Kg/K/キロのパターンを先にチェック
+                        const kgMatch = normalizedStr.match(/(\d+)\s*([Kk][Gg]?|キロ|ｷﾛ)/);
+                        if (kgMatch) {
+                            unit = parseInt(kgMatch[1]);
+                            unitType = 'kg';
+                            console.log('入数検出(フォールバック・Kg):', unit, 'Kg', '列:', c);
+                            continue;
+                        }
+                        // gのみのパターン
+                        const gMatch = normalizedStr.match(/(\d+)\s*[Gg]/);
+                        if (gMatch) {
+                            unit = parseInt(gMatch[1]);
+                            unitType = 'g';
+                            console.log('入数検出(フォールバック・g):', unit, 'g', '列:', c);
+                            continue;
+                        }
+                        // 他の単位パターン
+                        const unitMatch = normalizedStr.match(/(\d+)\s*(入|束|玉|袋|個|本|ｹｰｽ|ケース)/);
                         if (unitMatch) {
                             unit = parseInt(unitMatch[1]);
-                            const unitSuffix = unitMatch[2].toLowerCase();
-                            if (unitSuffix === 'k' || unitSuffix === 'kg' || unitSuffix === 'キロ') {
-                                unitType = 'kg';
-                            } else if (unitSuffix === 'g') {
-                                unitType = 'g';
-                            }
-                            console.log('入数検出(フォールバック・単位付):', unit, unitType, '列:', c);
+                            console.log('入数検出(フォールバック・単位付):', unit, '列:', c);
                             continue;
                         }
                         // 数字のみのパターン（1-100の範囲）
@@ -1584,15 +1607,18 @@ function parseHaibunFormat(wb, fileName) {
 
             // 100gあたり単価の場合、Kg単位を換算（4Kg = 40 x 100g）
             let effectiveUnit = unit;
+            let unitDisplay = unit; // 表示用（例: "4Kg（40）"）
             if (unitType === 'kg' && unit !== null) {
                 effectiveUnit = unit * 10; // 1Kg = 10 x 100g
+                unitDisplay = unit + 'Kg（' + effectiveUnit + '）';
                 console.log('重量換算: ', unit + 'Kg → ' + effectiveUnit + ' (100gあたり換算)');
             } else if (unitType === 'g' && unit !== null) {
                 effectiveUnit = Math.max(1, Math.round(unit / 100)); // gを100g単位に換算
+                unitDisplay = unit + 'g（' + effectiveUnit + '）';
                 console.log('重量換算: ', unit + 'g → ' + effectiveUnit + ' (100gあたり換算)');
             }
 
-            console.log('商品情報:', foundProd, { 規格: spec, 原価: cost, 売価: price, 入数: unit, 単位種別: unitType, 換算入数: effectiveUnit });
+            console.log('商品情報:', foundProd, { 規格: spec, 原価: cost, 売価: price, 入数: unit, 単位種別: unitType, 換算入数: effectiveUnit, 表示: unitDisplay });
 
             // 税抜価格が取得できなかった場合のフォールバック
             if (price === null && cost !== null) {
@@ -1615,7 +1641,7 @@ function parseHaibunFormat(wb, fileName) {
             }
 
             if (!pInfo[prodKey]) {
-                pInfo[prodKey] = { cost, price, unit: effectiveUnit, unitType, rawUnit: unit };
+                pInfo[prodKey] = { cost, price, unit: effectiveUnit, unitType, rawUnit: unit, unitDisplay };
             }
             prods.add(prodKey);
 
@@ -2370,7 +2396,7 @@ function updateTable() {
         if (showPrice)
             html += '<td class="info info-price">' + (info.price || '-') + '</td>';
         if (showUnit)
-            html += '<td class="info">' + (info.unit || '-') + '</td>';
+            html += '<td class="info">' + (info.unitDisplay || info.unit || '-') + '</td>';
         dates.forEach(function (d, ci) {
             const v = row[d] || 0;
             const store = Array.from(selectedStores)[0];
