@@ -219,24 +219,33 @@
             📥 インポート
             <input type="file" accept=".xlsx,.xls,.csv" onchange="importTags(this)" style="display:none;">
           </label>
-          <button class="btn-sm" onclick="exportTagTemplate()">📤 テンプレート出力</button>
-          <button class="btn-sm" onclick="exportTagStats()">📊 集計出力</button>
+          <button class="btn-sm" onclick="exportTagTemplate()">📤 テンプレート</button>
+          <button class="btn-sm" onclick="exportTagStats()">📊 Excel出力</button>
           <button id="tag-stats-toggle" class="toggle-btn" onclick="toggleTagStats()">▼</button>
         </div>
       </div>
       <div id="tag-stats-body" class="tag-stats-body">
-        <table class="tag-stats-table">
-          <thead>
-            <tr>
-              <th>タグ</th>
-              <th>数量</th>
-              <th>原価計</th>
-              <th>売価計</th>
-              <th>値入率</th>
-            </tr>
-          </thead>
-          <tbody id="tag-stats-tbody"></tbody>
-        </table>
+        <!-- サマリーカード -->
+        <div class="tag-summary-cards">
+          <div class="summary-card">
+            <div class="summary-label">総数量</div>
+            <div class="summary-value" id="tag-total-qty">0</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">原価計</div>
+            <div class="summary-value cost" id="tag-total-cost">¥0</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">売価計</div>
+            <div class="summary-value price" id="tag-total-price">¥0</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">粗利率</div>
+            <div class="summary-value margin" id="tag-total-margin">0%</div>
+          </div>
+        </div>
+        <!-- タグ別アコーディオン -->
+        <div id="tag-accordion" class="tag-accordion"></div>
       </div>
     </div>
 

@@ -844,6 +844,289 @@ body {
   font-weight: 500;
 }
 
+/* ========== タグ統計UI - サマリーカード ========== */
+.tag-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.summary-card {
+  background: linear-gradient(135deg, #f5f5f7 0%, #e8e8ed 100%);
+  border-radius: 10px;
+  padding: 12px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.summary-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+}
+
+.summary-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #86868b;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.summary-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1d1d1f;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+}
+
+.summary-value.cost {
+  color: #996600;
+}
+
+.summary-value.price {
+  color: #1976d2;
+}
+
+.summary-value.margin {
+  color: #2e7d32;
+}
+
+/* ========== タグ統計UI - アコーディオン ========== */
+.tag-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tag-category {
+  background: white;
+  border: 1px solid #e5e5e7;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+
+.tag-category:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.tag-category-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  cursor: pointer;
+  background: #f5f5f7;
+  transition: background 0.2s;
+  user-select: none;
+}
+
+.tag-category-header:hover {
+  background: #e8e8ed;
+}
+
+.tag-category-toggle {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #86868b;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.tag-category.expanded .tag-category-toggle {
+  transform: rotate(90deg);
+}
+
+.tag-category-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 13px;
+  color: #1d1d1f;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag-category-name .icon {
+  font-size: 16px;
+}
+
+.tag-category-stats {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+}
+
+.tag-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.tag-stat-label {
+  font-size: 9px;
+  color: #86868b;
+  font-weight: 500;
+}
+
+.tag-stat-value {
+  font-weight: 600;
+  color: #1d1d1f;
+}
+
+.tag-stat-value.qty {
+  color: #007AFF;
+}
+
+.tag-stat-value.cost {
+  color: #996600;
+}
+
+.tag-stat-value.price {
+  color: #1976d2;
+}
+
+.tag-stat-value.margin {
+  color: #2e7d32;
+}
+
+.tag-category-content {
+  display: none;
+  padding: 0;
+  background: white;
+}
+
+.tag-category.expanded .tag-category-content {
+  display: block;
+}
+
+/* サブカテゴリ */
+.tag-subcategory {
+  border-top: 1px solid #f0f0f0;
+}
+
+.tag-subcategory-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px 8px 32px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.tag-subcategory-header:hover {
+  background: #fafafa;
+}
+
+.tag-subcategory-name {
+  flex: 1;
+  font-size: 12px;
+  color: #1d1d1f;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tag-subcategory-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 10px;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+}
+
+.tag-subcategory-content {
+  display: none;
+  padding-left: 24px;
+}
+
+.tag-subcategory.expanded .tag-subcategory-content {
+  display: block;
+}
+
+.tag-subcategory.expanded .tag-subcategory-toggle {
+  transform: rotate(90deg);
+}
+
+.tag-subcategory-toggle {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: #86868b;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+/* 小分類アイテム */
+.tag-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px 6px 48px;
+  border-top: 1px solid #f5f5f7;
+  font-size: 11px;
+}
+
+.tag-item-name {
+  flex: 1;
+  color: #86868b;
+}
+
+.tag-item-stats {
+  display: flex;
+  gap: 12px;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+}
+
+/* プログレスバー */
+.tag-progress-bar {
+  height: 4px;
+  background: #e5e5e7;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.tag-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #007AFF, #34C759);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* 空状態 */
+.tag-empty {
+  text-align: center;
+  padding: 24px;
+  color: #86868b;
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .tag-summary-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .summary-value {
+    font-size: 14px;
+  }
+
+  .tag-category-stats {
+    display: none;
+  }
+
+  .tag-subcategory-stats {
+    gap: 8px;
+  }
+}
+
 /* ========== データテーブル ========== */
 .table-container {
   background: white;

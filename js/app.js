@@ -1205,6 +1205,8 @@ function importTags(input) {
 function updateTagStats() {
     const hierarchy = {};
     const noTag1 = { tag2s: {}, noTag2: {} };
+    let grandTotal = { qty: 0, cost: 0, price: 0 };
+
     currentProducts.forEach(function (p) {
         const t1 = getTag(p, 1), t2 = getTag(p, 2), t3 = getTag(p, 3);
         const info = (productInfo[p] || {});
@@ -1212,6 +1214,11 @@ function updateTagStats() {
         const unit = info.unit || 1;
         const cost = (info.cost || 0) * qty * unit;
         const price = (info.price || 0) * qty * unit;
+
+        grandTotal.qty += qty;
+        grandTotal.cost += cost;
+        grandTotal.price += price;
+
         if (t1) {
             if (!hierarchy[t1])
                 hierarchy[t1] = { _total: { qty: 0, cost: 0, price: 0 }, _children: {} };
@@ -1255,43 +1262,174 @@ function updateTagStats() {
             noTag1.noTag2[t3].price += price;
         }
     });
-    const tbody = document.getElementById('tag-stats-tbody');
+
+    // サマリーカードを更新
+    function calcMargin(d) { return d.price > 0 ? ((d.price - d.cost) / d.price * 100).toFixed(1) : 0; }
+    document.getElementById('tag-total-qty').textContent = grandTotal.qty.toLocaleString();
+    document.getElementById('tag-total-cost').textContent = '¥' + grandTotal.cost.toLocaleString();
+    document.getElementById('tag-total-price').textContent = '¥' + grandTotal.price.toLocaleString();
+    document.getElementById('tag-total-margin').textContent = calcMargin(grandTotal) + '%';
+
+    // アコーディオンを更新
+    const accordion = document.getElementById('tag-accordion');
     const t1s = Object.keys(hierarchy).sort();
     const hasOrphans = Object.keys(noTag1.tag2s).length > 0 || Object.keys(noTag1.noTag2).length > 0;
+
     if (t1s.length === 0 && !hasOrphans) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:0.5;">タグが設定されていません</td></tr>';
+        accordion.innerHTML = '<div class="tag-empty">タグが設定されていません</div>';
         return;
     }
-    function calcMargin(d) { return d.price > 0 ? ((d.price - d.cost) / d.price * 100).toFixed(1) : 0; }
-    var html = '';
+
+    function renderStats(d, showProgress, maxQty) {
+        const progressPct = maxQty > 0 ? (d.qty / maxQty * 100) : 0;
+        let html = '<div class="tag-stat-item"><span class="tag-stat-label">数量</span><span class="tag-stat-value qty">' + d.qty.toLocaleString() + '</span></div>';
+        html += '<div class="tag-stat-item"><span class="tag-stat-label">原価</span><span class="tag-stat-value cost">¥' + d.cost.toLocaleString() + '</span></div>';
+        html += '<div class="tag-stat-item"><span class="tag-stat-label">売価</span><span class="tag-stat-value price">¥' + d.price.toLocaleString() + '</span></div>';
+        html += '<div class="tag-stat-item"><span class="tag-stat-label">粗利</span><span class="tag-stat-value margin">' + calcMargin(d) + '%</span></div>';
+        return html;
+    }
+
+    function renderSmallStats(d) {
+        return '<span class="tag-stat-value qty">' + d.qty.toLocaleString() + '</span>' +
+               '<span class="tag-stat-value cost">¥' + d.cost.toLocaleString() + '</span>' +
+               '<span class="tag-stat-value price">¥' + d.price.toLocaleString() + '</span>' +
+               '<span class="tag-stat-value margin">' + calcMargin(d) + '%</span>';
+    }
+
+    let html = '';
+    let catIndex = 0;
+
     t1s.forEach(function (t1) {
         const d1 = hierarchy[t1]._total;
-        html += '<tr class="parent-row"><td><span class="tag-label tag1">📁 ' + escapeHtml(t1) + '</span></td><td class="num">' + d1.qty.toLocaleString() + '</td><td class="num">¥' + d1.cost.toLocaleString() + '</td><td class="num">¥' + d1.price.toLocaleString() + '</td><td class="num">' + calcMargin(d1) + '%</td></tr>';
-        Object.keys(hierarchy[t1]._children).sort().forEach(function (t2) {
-            const d2 = hierarchy[t1]._children[t2]._total;
-            html += '<tr class="child-row"><td>├ ' + escapeHtml(t2) + '</td><td class="num">' + d2.qty.toLocaleString() + '</td><td class="num">¥' + d2.cost.toLocaleString() + '</td><td class="num">¥' + d2.price.toLocaleString() + '</td><td class="num">' + calcMargin(d2) + '%</td></tr>';
-            Object.keys(hierarchy[t1]._children[t2]._children).sort().forEach(function (t3) {
-                const d3 = hierarchy[t1]._children[t2]._children[t3];
-                html += '<tr class="grandchild-row"><td>│ └ ' + escapeHtml(t3) + '</td><td class="num">' + d3.qty.toLocaleString() + '</td><td class="num">¥' + d3.cost.toLocaleString() + '</td><td class="num">¥' + d3.price.toLocaleString() + '</td><td class="num">' + calcMargin(d3) + '%</td></tr>';
+        const progressPct = grandTotal.qty > 0 ? (d1.qty / grandTotal.qty * 100) : 0;
+        const t2Keys = Object.keys(hierarchy[t1]._children).sort();
+        const hasChildren = t2Keys.length > 0;
+
+        html += '<div class="tag-category" data-cat="' + catIndex + '">';
+        html += '<div class="tag-category-header" onclick="toggleTagCategory(' + catIndex + ')">';
+        html += '<span class="tag-category-toggle">▶</span>';
+        html += '<span class="tag-category-name"><span class="icon">📁</span>' + escapeHtml(t1) + '</span>';
+        html += '<div class="tag-category-stats">' + renderStats(d1, false, grandTotal.qty) + '</div>';
+        html += '</div>';
+        html += '<div class="tag-progress-bar"><div class="tag-progress-fill" style="width:' + progressPct + '%"></div></div>';
+
+        if (hasChildren) {
+            html += '<div class="tag-category-content">';
+            t2Keys.forEach(function (t2, subIndex) {
+                const d2 = hierarchy[t1]._children[t2]._total;
+                const t3Keys = Object.keys(hierarchy[t1]._children[t2]._children).sort();
+                const hasGrandChildren = t3Keys.length > 0;
+                const subId = catIndex + '-' + subIndex;
+
+                html += '<div class="tag-subcategory" data-sub="' + subId + '">';
+                html += '<div class="tag-subcategory-header" onclick="toggleTagSubcategory(\'' + subId + '\')">';
+                if (hasGrandChildren) {
+                    html += '<span class="tag-subcategory-toggle">▶</span>';
+                } else {
+                    html += '<span class="tag-subcategory-toggle" style="visibility:hidden">▶</span>';
+                }
+                html += '<span class="tag-subcategory-name">├ ' + escapeHtml(t2) + '</span>';
+                html += '<div class="tag-subcategory-stats">' + renderSmallStats(d2) + '</div>';
+                html += '</div>';
+
+                if (hasGrandChildren) {
+                    html += '<div class="tag-subcategory-content">';
+                    t3Keys.forEach(function (t3) {
+                        const d3 = hierarchy[t1]._children[t2]._children[t3];
+                        html += '<div class="tag-item">';
+                        html += '<span class="tag-item-name">└ ' + escapeHtml(t3) + '</span>';
+                        html += '<div class="tag-item-stats">' + renderSmallStats(d3) + '</div>';
+                        html += '</div>';
+                    });
+                    html += '</div>';
+                }
+                html += '</div>';
             });
-        });
+            html += '</div>';
+        }
+        html += '</div>';
+        catIndex++;
     });
+
+    // 未分類
     if (hasOrphans) {
-        html += '<tr class="parent-row"><td><span class="tag-no-parent">📂 (未分類)</span></td><td class="num">-</td><td class="num">-</td><td class="num">-</td><td class="num">-</td></tr>';
-        Object.keys(noTag1.tag2s).sort().forEach(function (t2) {
+        const orphanQty = Object.values(noTag1.tag2s).reduce((sum, v) => sum + v._total.qty, 0) +
+                          Object.values(noTag1.noTag2).reduce((sum, v) => sum + v.qty, 0);
+        const orphanCost = Object.values(noTag1.tag2s).reduce((sum, v) => sum + v._total.cost, 0) +
+                           Object.values(noTag1.noTag2).reduce((sum, v) => sum + v.cost, 0);
+        const orphanPrice = Object.values(noTag1.tag2s).reduce((sum, v) => sum + v._total.price, 0) +
+                            Object.values(noTag1.noTag2).reduce((sum, v) => sum + v.price, 0);
+        const orphanData = { qty: orphanQty, cost: orphanCost, price: orphanPrice };
+        const progressPct = grandTotal.qty > 0 ? (orphanQty / grandTotal.qty * 100) : 0;
+
+        html += '<div class="tag-category" data-cat="' + catIndex + '">';
+        html += '<div class="tag-category-header" onclick="toggleTagCategory(' + catIndex + ')">';
+        html += '<span class="tag-category-toggle">▶</span>';
+        html += '<span class="tag-category-name"><span class="icon">📂</span>(未分類)</span>';
+        html += '<div class="tag-category-stats">' + renderStats(orphanData, false, grandTotal.qty) + '</div>';
+        html += '</div>';
+        html += '<div class="tag-progress-bar"><div class="tag-progress-fill" style="width:' + progressPct + '%"></div></div>';
+
+        html += '<div class="tag-category-content">';
+
+        Object.keys(noTag1.tag2s).sort().forEach(function (t2, subIndex) {
             const d2 = noTag1.tag2s[t2]._total;
-            html += '<tr class="child-row"><td>├ ' + escapeHtml(t2) + '</td><td class="num">' + d2.qty.toLocaleString() + '</td><td class="num">¥' + d2.cost.toLocaleString() + '</td><td class="num">¥' + d2.price.toLocaleString() + '</td><td class="num">' + calcMargin(d2) + '%</td></tr>';
-            Object.keys(noTag1.tag2s[t2]._children).sort().forEach(function (t3) {
-                const d3 = noTag1.tag2s[t2]._children[t3];
-                html += '<tr class="grandchild-row"><td>│ └ ' + escapeHtml(t3) + '</td><td class="num">' + d3.qty.toLocaleString() + '</td><td class="num">¥' + d3.cost.toLocaleString() + '</td><td class="num">¥' + d3.price.toLocaleString() + '</td><td class="num">' + calcMargin(d3) + '%</td></tr>';
-            });
+            const t3Keys = Object.keys(noTag1.tag2s[t2]._children).sort();
+            const hasGrandChildren = t3Keys.length > 0;
+            const subId = catIndex + '-' + subIndex;
+
+            html += '<div class="tag-subcategory" data-sub="' + subId + '">';
+            html += '<div class="tag-subcategory-header" onclick="toggleTagSubcategory(\'' + subId + '\')">';
+            if (hasGrandChildren) {
+                html += '<span class="tag-subcategory-toggle">▶</span>';
+            } else {
+                html += '<span class="tag-subcategory-toggle" style="visibility:hidden">▶</span>';
+            }
+            html += '<span class="tag-subcategory-name">├ ' + escapeHtml(t2) + '</span>';
+            html += '<div class="tag-subcategory-stats">' + renderSmallStats(d2) + '</div>';
+            html += '</div>';
+
+            if (hasGrandChildren) {
+                html += '<div class="tag-subcategory-content">';
+                t3Keys.forEach(function (t3) {
+                    const d3 = noTag1.tag2s[t2]._children[t3];
+                    html += '<div class="tag-item">';
+                    html += '<span class="tag-item-name">└ ' + escapeHtml(t3) + '</span>';
+                    html += '<div class="tag-item-stats">' + renderSmallStats(d3) + '</div>';
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+            html += '</div>';
         });
+
         Object.keys(noTag1.noTag2).sort().forEach(function (t3) {
             const d3 = noTag1.noTag2[t3];
-            html += '<tr class="grandchild-row"><td>└ ' + escapeHtml(t3) + '</td><td class="num">' + d3.qty.toLocaleString() + '</td><td class="num">¥' + d3.cost.toLocaleString() + '</td><td class="num">¥' + d3.price.toLocaleString() + '</td><td class="num">' + calcMargin(d3) + '%</td></tr>';
+            html += '<div class="tag-item" style="padding-left:32px;">';
+            html += '<span class="tag-item-name">└ ' + escapeHtml(t3) + '</span>';
+            html += '<div class="tag-item-stats">' + renderSmallStats(d3) + '</div>';
+            html += '</div>';
         });
+
+        html += '</div>';
+        html += '</div>';
     }
-    tbody.innerHTML = html;
+
+    accordion.innerHTML = html;
+}
+
+function toggleTagCategory(index) {
+    const cat = document.querySelector('.tag-category[data-cat="' + index + '"]');
+    if (cat) {
+        cat.classList.toggle('expanded');
+    }
+}
+
+function toggleTagSubcategory(id) {
+    const sub = document.querySelector('.tag-subcategory[data-sub="' + id + '"]');
+    if (sub) {
+        sub.classList.toggle('expanded');
+    }
 }
 // ヘッダークリックでソート切り替え
 function toggleSort(key) {
