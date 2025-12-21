@@ -1363,6 +1363,14 @@ function updateTable() {
     else if (sortOrder === 'name-desc') {
         products.sort(function (a, b) { return b.localeCompare(a, 'ja'); });
     }
+    else if (sortOrder === 'file') {
+        // ファイル順：allProductsの順序を維持
+        products.sort(function (a, b) {
+            const idxA = allProducts.indexOf(a);
+            const idxB = allProducts.indexOf(b);
+            return (idxA === -1 ? 9999 : idxA) - (idxB === -1 ? 9999 : idxB);
+        });
+    }
     else {
         products.sort(function (a, b) { return a.localeCompare(b, 'ja'); });
     }
