@@ -1371,10 +1371,25 @@ function updateTable() {
             case 'name-desc':
                 return function (a, b) { return b.localeCompare(a, 'ja'); };
             case 'file':
+                // customFileOrderに基づいてファイル順の商品インデックスを構築
+                const fileOrderMap = {};
+                const fileIdToName = {};
+                loadedFiles.forEach(f => { fileIdToName[f.id] = f.name; });
+                const orderedFileIds = customFileOrder.length > 0 ? customFileOrder : loadedFiles.map(f => f.id);
+                let orderIdx = 0;
+                orderedFileIds.forEach(fileId => {
+                    const fileName = fileIdToName[fileId];
+                    if (!fileName) return;
+                    rawData.data.forEach(item => {
+                        if (item.fileName === fileName && fileOrderMap[item.product] === undefined) {
+                            fileOrderMap[item.product] = orderIdx++;
+                        }
+                    });
+                });
                 return function (a, b) {
-                    const idxA = allProducts.indexOf(a);
-                    const idxB = allProducts.indexOf(b);
-                    return (idxA === -1 ? 9999 : idxA) - (idxB === -1 ? 9999 : idxB);
+                    const idxA = fileOrderMap[a] !== undefined ? fileOrderMap[a] : 9999;
+                    const idxB = fileOrderMap[b] !== undefined ? fileOrderMap[b] : 9999;
+                    return idxA - idxB;
                 };
             default: // 'name' or default
                 return function (a, b) { return a.localeCompare(b, 'ja'); };
