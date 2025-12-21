@@ -1329,7 +1329,10 @@ function updateTable() {
     const st = document.getElementById('search-input').value;
     const pivot = {}, dateTotals = {};
     dates.forEach(function (d) { dateTotals[d] = 0; });
-    const relProds = showZero ? allProducts.filter(function (p) { return st === '' || p.indexOf(st) >= 0; }) : [];
+    // 選択されたファイルに含まれる商品のみを対象にする
+    const selectedFileNames = new Set(loadedFiles.filter(f => selectedFiles.has(f.id)).map(f => f.name));
+    const productsInSelectedFiles = new Set(rawData.data.filter(i => selectedFileNames.has(i.fileName)).map(i => i.product));
+    const relProds = showZero ? allProducts.filter(function (p) { return productsInSelectedFiles.has(p) && (st === '' || p.indexOf(st) >= 0); }) : [];
     relProds.forEach(function (p) { pivot[p] = { total: 0 }; dates.forEach(function (d) { pivot[p][d] = 0; }); });
     filtered.forEach(function (i) {
         if (!pivot[i.product]) {
