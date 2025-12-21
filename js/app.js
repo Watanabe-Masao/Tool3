@@ -1029,7 +1029,7 @@ function updateFileChips() {
 function updateFileFilterList() {
     document.getElementById('file-filter-list').innerHTML = loadedFiles.map(f => '<label class="checkbox-item ' + (selectedFiles.has(f.id) ? 'selected' : '') + '"><input type="checkbox" ' + (selectedFiles.has(f.id) ? 'checked' : '') + ' onchange="toggleFileFilter(\'' + f.id + '\',this)"> ' + escapeHtml(f.name) + '</label>').join('');
 }
-function removeFile(id) { loadedFiles = loadedFiles.filter(f => f.id != id); selectedFiles.delete(id); customFileOrder = customFileOrder.filter(fid => fid != id); if (loadedFiles.length === 0) {
+function removeFile(id) { const numId = Number(id); loadedFiles = loadedFiles.filter(f => f.id !== numId); selectedFiles.delete(numId); customFileOrder = customFileOrder.filter(fid => fid !== numId); if (loadedFiles.length === 0) {
     clearAllFiles();
     return;
 } mergeAllData(); updateFileChips(); initUI(); document.getElementById('file-filter-panel').style.display = loadedFiles.length > 1 ? 'block' : 'none'; }
@@ -1048,7 +1048,7 @@ function clearAllFiles() {
     document.getElementById('files-bar').classList.remove('show');
     document.getElementById('main-content').classList.remove('show');
 }
-function toggleFileFilter(id, cb) { cb.checked ? selectedFiles.add(id) : selectedFiles.delete(id); cb.parentElement.classList.toggle('selected', cb.checked); updateTable(); }
+function toggleFileFilter(id, cb) { const numId = Number(id); cb.checked ? selectedFiles.add(numId) : selectedFiles.delete(numId); cb.parentElement.classList.toggle('selected', cb.checked); updateTable(); }
 function selectAllFiles() { selectedFiles = new Set(loadedFiles.map(f => f.id)); document.querySelectorAll('#file-filter-list input').forEach(cb => { cb.checked = true; cb.parentElement.classList.add('selected'); }); updateTable(); }
 function clearAllFileFilters() { selectedFiles = new Set(); document.querySelectorAll('#file-filter-list input').forEach(cb => { cb.checked = false; cb.parentElement.classList.remove('selected'); }); updateTable(); }
 function extractProductName(raw) {
