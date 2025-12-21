@@ -1750,16 +1750,32 @@ function renderQrCode() {
     const chunk = qrChunks[currentQrIndex];
     const prefix = qrChunks.length > 1 ? `[${currentQrIndex + 1}/${qrChunks.length}]` : '';
     const qrData = prefix + chunk;
-    // QRCodeライブラリでcanvasを生成
-    if (typeof QRCode !== 'undefined') {
-        QRCode.toCanvas(qrData, { width: 256, margin: 2 }, function (err, canvas) {
-            if (err) {
-                container.innerHTML = '<p>QRコード生成エラー</p>';
-                console.error(err);
-                return;
+    // qrcode-generatorライブラリでQRコードを生成
+    if (typeof qrcode !== 'undefined') {
+        try {
+            // TypeNumber 0 = 自動, ErrorCorrectionLevel L = 7%
+            const qr = qrcode(0, 'L');
+            qr.addData(qrData);
+            qr.make();
+            // SVGとして生成（より鮮明）
+            const size = 256;
+            const cellSize = Math.floor(size / qr.getModuleCount());
+            let svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`;
+            svg += `<rect width="100%" height="100%" fill="white"/>`;
+            for (let row = 0; row < qr.getModuleCount(); row++) {
+                for (let col = 0; col < qr.getModuleCount(); col++) {
+                    if (qr.isDark(row, col)) {
+                        svg += `<rect x="${col * cellSize}" y="${row * cellSize}" width="${cellSize}" height="${cellSize}" fill="black"/>`;
+                    }
+                }
             }
-            container.appendChild(canvas);
-        });
+            svg += '</svg>';
+            container.innerHTML = svg;
+        }
+        catch (err) {
+            container.innerHTML = '<p>QRコード生成エラー: データが大きすぎます</p>';
+            console.error(err);
+        }
     }
     else {
         container.innerHTML = '<p>QRコードライブラリが読み込まれていません</p>';
@@ -1796,7 +1812,7 @@ async function downloadOfflineApp() {
         const xlsxRes = await fetch('https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js');
         const xlsxJs = await xlsxRes.text();
         // QRCodeライブラリを取得
-        const qrRes = await fetch('https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js');
+        const qrRes = await fetch('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js');
         const qrJs = await qrRes.text();
         // app.jsを取得
         const appRes = await fetch('js/app.js');
