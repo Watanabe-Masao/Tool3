@@ -1385,13 +1385,28 @@ function parseHaibunFormat(wb, fileName) {
                 debugRowCount++;
             }
 
-            // 日付を探す（12/21, 12/21(日) などの形式）
+            // 日付を探す（12/21, 12/21(日)、またはExcelシリアル番号形式）
             for (let c = 0; c < Math.min(6, row.length); c++) {
-                const cellStr = String(row[c] || '');
+                const cellVal = row[c];
+                const cellStr = String(cellVal || '');
+
+                // MM/DD形式をチェック
                 const dm = cellStr.match(/(\d{1,2})\/(\d{1,2})/);
                 if (dm) {
                     curDate = parseInt(dm[1]) + '/' + parseInt(dm[2]);
-                    console.log('日付検出:', curDate, '行:', r);
+                    console.log('日付検出(文字列):', curDate, '行:', r);
+                    break;
+                }
+
+                // Excelシリアル番号形式をチェック（40000-50000程度の数値）
+                const numVal = Number(cellVal);
+                if (numVal >= 40000 && numVal <= 55000) {
+                    // Excelシリアル番号を日付に変換
+                    const excelDate = new Date((numVal - 25569) * 86400 * 1000);
+                    const m = excelDate.getMonth() + 1;
+                    const d = excelDate.getDate();
+                    curDate = m + '/' + d;
+                    console.log('日付検出(Excel):', curDate, '元値:', numVal, '行:', r);
                     break;
                 }
             }
