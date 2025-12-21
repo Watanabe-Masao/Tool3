@@ -2,7 +2,7 @@
 
 ## 概要
 
-野菜発注管理システムを JavaScript から TypeScript へ完全移行しました。
+発注台帳ビューアーを JavaScript から TypeScript へ完全移行しました。
 
 ## 実施日
 2025-12-11

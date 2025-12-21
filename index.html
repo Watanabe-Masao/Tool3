@@ -3,7 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>野菜発注管理システム</title>
+  <title>発注台帳ビューアー</title>
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#4a90d9">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="発注台帳">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <!-- Deployed: 2025-12-11 -->
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -33,7 +40,10 @@
     <div id="files-bar-body" class="files-bar-body">
       <div id="file-chips" class="file-chips"></div>
       <input type="file" id="file-input-mini" accept=".xls,.xlsx" multiple style="display:none;">
-      <button class="btn-add-file" onclick="document.getElementById('file-input-mini').click()">➕ ファイル追加</button>
+      <div class="files-bar-actions">
+        <button class="btn-add-file" onclick="document.getElementById('file-input-mini').click()">➕ ファイル追加</button>
+        <button class="btn-add-file" onclick="showFileOrderModal()">🔢 順序設定</button>
+      </div>
     </div>
   </div>
 
@@ -46,30 +56,17 @@
     <div id="saved-list" class="saved-list"></div>
   </div>
 
-  <!-- クラウド同期（トップ画面用） -->
-  <div class="cloud-section">
-    <div class="cloud-header">
-      <h3>☁️ クラウド同期</h3>
-      <button id="cloud-toggle" class="toggle-btn">▼</button>
-    </div>
-    <div id="cloud-quick" class="cloud-quick">
-      <p class="cloud-desc">他のデバイスとデータを共有できます</p>
-      <button class="btn btn-cloud-main" id="cloud-sync-btn">☁️ クラウド同期を開く</button>
-    </div>
-  </div>
-
   <!-- メインコンテンツ -->
   <div id="main-content" class="main-content">
     <!-- ヘッダー -->
     <header class="app-header">
-      <h1>🥬 野菜発注管理システム</h1>
+      <h1>📋 発注台帳ビューアー</h1>
       <div class="header-actions">
         <button class="btn btn-success" onclick="showAddProductModal()">➕ 新商品</button>
         <button class="btn btn-primary" onclick="showSaveModal()">💾 保存</button>
-        <button class="btn btn-cloud" onclick="showCloudSyncModal()" title="クラウド同期">☁️ 同期</button>
         <button class="btn" onclick="printTable()">🖨️ 印刷</button>
-        <button class="btn" onclick="exportToExcel()">📊 Excel</button>
         <button class="btn" onclick="exportToCSV()">📄 CSV</button>
+        <button class="btn" onclick="downloadOfflineApp()">⬇️ DL</button>
         <button class="btn" onclick="toggleFullscreen()">⛶ 全画面</button>
         <button class="btn btn-help" onclick="showHelpModal()" title="ヘルプ・ショートカット">❓</button>
       </div>
@@ -95,6 +92,9 @@
               <button onclick="clearAllFileFilters()">クリア</button>
             </div>
             <div id="file-filter-list" class="checkbox-list"></div>
+            <div class="dropdown-footer">
+              <button class="btn-ok" onclick="closeDropdown('file-filter')">OK</button>
+            </div>
           </div>
         </div>
 
@@ -110,6 +110,9 @@
               <button onclick="clearAllStores()">クリア</button>
             </div>
             <div id="store-list" class="checkbox-list"></div>
+            <div class="dropdown-footer">
+              <button class="btn-ok" onclick="closeDropdown('store')">OK</button>
+            </div>
           </div>
         </div>
 
@@ -125,6 +128,9 @@
               <button onclick="clearAllSuppliers()">クリア</button>
             </div>
             <div id="supplier-list" class="checkbox-list"></div>
+            <div class="dropdown-footer">
+              <button class="btn-ok" onclick="closeDropdown('supplier')">OK</button>
+            </div>
           </div>
         </div>
       </div>
@@ -147,7 +153,7 @@
       <!-- 表示オプション -->
       <div class="options-row">
         <label class="checkbox-label">
-          <input type="checkbox" id="show-zero" onchange="updateTable()"> ゼロ表示
+          <input type="checkbox" id="show-zero" checked onchange="updateTable()"> ゼロ表示
         </label>
         <label class="checkbox-label">
           <input type="checkbox" id="show-cost" checked onchange="updateTable()"> 原価
@@ -156,23 +162,43 @@
           <input type="checkbox" id="show-price" checked onchange="updateTable()"> 売価
         </label>
         <label class="checkbox-label">
-          <input type="checkbox" id="show-unit" onchange="updateTable()"> 入数
+          <input type="checkbox" id="show-unit" checked onchange="updateTable()"> 入数
         </label>
         <label class="checkbox-label">
-          <input type="checkbox" id="show-tag1" checked onchange="updateTable()"> #大分類
+          <input type="checkbox" id="show-tag1" onchange="updateTable()"> #大分類
         </label>
         <label class="checkbox-label">
-          <input type="checkbox" id="show-tag2" checked onchange="updateTable()"> #中分類
+          <input type="checkbox" id="show-tag2" onchange="updateTable()"> #中分類
         </label>
         <label class="checkbox-label">
           <input type="checkbox" id="show-tag3" onchange="updateTable()"> #小分類
         </label>
-        <label>並び順:</label>
+        <label>並び順1:</label>
         <select id="sort-order" onchange="updateTable()">
-          <option value="name">品目名順</option>
+          <option value="file">ファイル順</option>
+          <option value="name">品目名 ▲</option>
+          <option value="name-desc">品目名 ▼</option>
           <option value="tag">タグ順</option>
-          <option value="qty-desc">数量多い順</option>
-          <option value="qty-asc">数量少ない順</option>
+          <option value="qty-desc">数量 ▼</option>
+          <option value="qty-asc">数量 ▲</option>
+          <option value="cost-desc">原価 ▼</option>
+          <option value="cost-asc">原価 ▲</option>
+          <option value="price-desc">売価 ▼</option>
+          <option value="price-asc">売価 ▲</option>
+        </select>
+        <label>2:</label>
+        <select id="sort-order2" onchange="updateTable()">
+          <option value="">なし</option>
+          <option value="file">ファイル順</option>
+          <option value="name">品目名 ▲</option>
+          <option value="name-desc">品目名 ▼</option>
+          <option value="tag">タグ順</option>
+          <option value="qty-desc">数量 ▼</option>
+          <option value="qty-asc">数量 ▲</option>
+          <option value="cost-desc">原価 ▼</option>
+          <option value="cost-asc">原価 ▲</option>
+          <option value="price-desc">売価 ▼</option>
+          <option value="price-asc">売価 ▲</option>
         </select>
       </div>
     </div>
@@ -198,35 +224,46 @@
       <div class="tag-stats-header">
         <h3>📊 タグ別集計</h3>
         <div class="tag-stats-actions">
+          <button class="btn-sm" onclick="showTagStatsModal()">🔍 詳細表示</button>
           <label class="file-label">
             📥 インポート
             <input type="file" accept=".xlsx,.xls,.csv" onchange="importTags(this)" style="display:none;">
           </label>
-          <button class="btn-sm" onclick="exportTagTemplate()">📤 テンプレート出力</button>
-          <button class="btn-sm" onclick="exportTagStats()">📊 集計出力</button>
+          <button class="btn-sm" onclick="exportTagTemplate()">📤 テンプレート</button>
+          <button class="btn-sm" onclick="exportTagStats()">📊 Excel出力</button>
           <button id="tag-stats-toggle" class="toggle-btn" onclick="toggleTagStats()">▼</button>
         </div>
       </div>
       <div id="tag-stats-body" class="tag-stats-body">
-        <table class="tag-stats-table">
-          <thead>
-            <tr>
-              <th>タグ</th>
-              <th>数量</th>
-              <th>原価計</th>
-              <th>売価計</th>
-              <th>値入率</th>
-            </tr>
-          </thead>
-          <tbody id="tag-stats-tbody"></tbody>
-        </table>
+        <!-- サマリーカード -->
+        <div class="tag-summary-cards">
+          <div class="summary-card">
+            <div class="summary-label">総数量</div>
+            <div class="summary-value" id="tag-total-qty">0</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">原価計</div>
+            <div class="summary-value cost" id="tag-total-cost">¥0</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">売価計</div>
+            <div class="summary-value price" id="tag-total-price">¥0</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">粗利率</div>
+            <div class="summary-value margin" id="tag-total-margin">0%</div>
+          </div>
+        </div>
+        <!-- タグ別アコーディオン -->
+        <div id="tag-accordion" class="tag-accordion"></div>
       </div>
     </div>
 
     <!-- データテーブル -->
-    <div class="table-container">
+    <div id="table-container" class="table-container">
       <div class="table-help">
         💡 ヒント: セルをダブルクリックで編集 | 列/行ヘッダーをドラッグで選択 | ❓ボタンで詳細ヘルプ
+        <button class="btn-fullscreen" onclick="toggleTableFullscreen()">⛶ 全画面</button>
       </div>
       <div id="table-scroll" class="table-scroll">
         <div id="no-data" class="no-data">データがありません</div>
@@ -242,103 +279,13 @@
   <div id="save-modal" class="modal">
     <div class="modal-content">
       <h2>💾 データを保存</h2>
+      <div id="current-save-info" style="margin-bottom:10px;color:#666;font-size:0.9em;"></div>
       <label>保存名:</label>
       <input type="text" id="save-name" placeholder="例: 2024年1月分データ">
       <div class="modal-actions">
-        <button class="btn btn-primary" onclick="saveToDatabase()">ローカル保存</button>
+        <button class="btn btn-primary" onclick="saveToDatabase(false)">📁 新規保存</button>
+        <button id="overwrite-btn" class="btn btn-primary" onclick="saveToDatabase(true)" style="display:none;">💾 上書き保存</button>
         <button class="btn" onclick="closeSaveModal()">キャンセル</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- クラウド同期モーダル -->
-  <div id="cloud-sync-modal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>☁️ クラウド同期</h2>
-        <button class="modal-close" onclick="closeCloudSyncModal()" type="button">✕</button>
-      </div>
-
-      <div class="cloud-sync-section">
-        <div id="firebase-setup-section">
-          <h3>🔧 Firebase設定</h3>
-          <p class="help-text">Firebase Console から取得した設定情報を入力してください</p>
-
-          <div class="form-group">
-            <label>API Key *</label>
-            <input type="text" id="firebase-api-key" placeholder="AIzaSy...">
-          </div>
-          <div class="form-group">
-            <label>Project ID *</label>
-            <input type="text" id="firebase-project-id" placeholder="my-project-123">
-          </div>
-          <div class="form-group">
-            <label>App ID *</label>
-            <input type="text" id="firebase-app-id" placeholder="1:123456789:web:abc...">
-          </div>
-
-          <button class="btn btn-primary" onclick="initFirebase()" type="button">🔗 Firebase接続</button>
-          <p class="help-text">
-            ℹ️ Firebase Console (<a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a>) でプロジェクトを作成し、
-            プロジェクト設定 > アプリ > ウェブアプリ から設定情報を取得してください
-          </p>
-        </div>
-
-        <div id="firebase-sync-section" style="display:none;">
-          <h3>📱 デバイス間同期</h3>
-
-          <div class="sync-status">
-            <div class="status-indicator" id="sync-status">
-              <span class="status-dot"></span>
-              <span id="sync-status-text">未接続</span>
-            </div>
-          </div>
-
-          <div class="room-code-section">
-            <h4>新しいルームを作成</h4>
-            <button class="btn btn-success" onclick="createRoom()" type="button">
-              ➕ 新規ルーム作成（6桁コード生成）
-            </button>
-            <div id="created-room-code" class="room-code-display" style="display:none;">
-              <p>ルームコード:</p>
-              <div class="room-code-large" id="room-code-value"></div>
-              <p class="help-text">このコードを他のデバイスで入力してください</p>
-            </div>
-          </div>
-
-          <div class="room-join-section">
-            <h4>既存のルームに参加</h4>
-            <div class="form-group">
-              <label>ルームコード（6桁）</label>
-              <input type="text" id="room-code-input" placeholder="例: ABC123" maxlength="6" style="text-transform:uppercase;">
-            </div>
-            <button class="btn btn-primary" onclick="joinRoom()" type="button">🔗 ルームに参加</button>
-          </div>
-
-          <div class="sync-actions" id="sync-actions" style="display:none;">
-            <h4>同期操作</h4>
-
-            <!-- ファイル選択セクション -->
-            <div class="upload-file-selector" id="upload-file-selector">
-              <p class="selector-label">アップロードするファイルを選択:</p>
-              <div class="file-checkbox-list" id="upload-file-list"></div>
-              <div class="selector-actions">
-                <button class="btn btn-sm" onclick="selectAllUploadFiles()" type="button">全選択</button>
-                <button class="btn btn-sm" onclick="clearAllUploadFiles()" type="button">全解除</button>
-              </div>
-            </div>
-
-            <button class="btn btn-primary" onclick="uploadSelectedFiles()" type="button">⬆️ 選択ファイルをアップロード</button>
-            <button class="btn" onclick="uploadToCloud()" type="button">⬆️ 全データをアップロード</button>
-            <button class="btn" onclick="downloadFromCloud()" type="button">⬇️ クラウドから取得</button>
-            <button class="btn" onclick="enableAutoSync()" type="button" id="auto-sync-btn">🔄 自動同期を有効化</button>
-            <button class="btn" onclick="leaveRoom()" type="button">🚪 ルームから退出</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="modal-actions">
-        <button class="btn" onclick="closeCloudSyncModal()" type="button">閉じる</button>
       </div>
     </div>
   </div>
@@ -471,7 +418,6 @@
         <h3>💾 保存・出力</h3>
         <ul>
           <li><strong>データ保存</strong>: ブラウザに保存（IndexedDB）</li>
-          <li><strong>Excel出力</strong>: 現在の表示内容をExcelファイルで出力</li>
           <li><strong>CSV出力</strong>: CSV形式で出力</li>
           <li><strong>印刷</strong>: ブラウザの印刷機能で印刷プレビュー</li>
         </ul>
@@ -520,6 +466,145 @@
     </div>
   </div>
 
+  <!-- ファイル順序モーダル -->
+  <div id="file-order-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>🔢 ファイル順序設定</h2>
+        <button class="modal-close" onclick="closeFileOrderModal()" type="button">✕</button>
+      </div>
+      <p style="margin-bottom:10px;color:#666;">ドラッグで順序を変更できます。この順序で「ファイル順」ソートが適用されます。</p>
+      <div id="file-order-list" class="file-order-list"></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="applyFileOrder()">✓ 適用</button>
+        <button class="btn" onclick="closeFileOrderModal()">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- タグ統計詳細モーダル -->
+  <div id="tag-stats-modal" class="modal">
+    <div class="modal-content modal-fullscreen">
+      <div class="modal-header">
+        <h2>📊 タグ別集計 - 詳細分析</h2>
+        <button class="modal-close" onclick="closeTagStatsModal()" type="button">✕</button>
+      </div>
+      <div class="tag-modal-body">
+        <!-- 総合サマリー -->
+        <div class="tag-modal-summary">
+          <div class="tag-modal-summary-card total">
+            <div class="card-icon">📦</div>
+            <div class="card-content">
+              <div class="card-label">総数量</div>
+              <div class="card-value" id="modal-total-qty">0</div>
+            </div>
+          </div>
+          <div class="tag-modal-summary-card cost">
+            <div class="card-icon">💰</div>
+            <div class="card-content">
+              <div class="card-label">原価合計</div>
+              <div class="card-value" id="modal-total-cost">¥0</div>
+            </div>
+          </div>
+          <div class="tag-modal-summary-card price">
+            <div class="card-icon">💵</div>
+            <div class="card-content">
+              <div class="card-label">売価合計</div>
+              <div class="card-value" id="modal-total-price">¥0</div>
+            </div>
+          </div>
+          <div class="tag-modal-summary-card profit">
+            <div class="card-icon">📈</div>
+            <div class="card-content">
+              <div class="card-label">粗利合計</div>
+              <div class="card-value" id="modal-total-profit">¥0</div>
+            </div>
+          </div>
+          <div class="tag-modal-summary-card margin">
+            <div class="card-icon">%</div>
+            <div class="card-content">
+              <div class="card-label">粗利率</div>
+              <div class="card-value" id="modal-total-margin">0%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 大分類一覧テーブル -->
+        <div class="tag-modal-section">
+          <h3>📁 大分類別集計 (クリックでフィルタ)</h3>
+          <div class="tag-modal-table-wrap">
+            <table class="tag-modal-table" id="modal-tag1-table">
+              <thead>
+                <tr>
+                  <th class="col-name">大分類</th>
+                  <th class="col-num">数量</th>
+                  <th class="col-num">原価</th>
+                  <th class="col-num">売価</th>
+                  <th class="col-num">粗利</th>
+                  <th class="col-num">粗利率</th>
+                  <th class="col-bar">構成比</th>
+                  <th class="col-num" title="構成比×粗利率÷100">相乗積</th>
+                </tr>
+              </thead>
+              <tbody id="modal-tag1-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 中分類一覧テーブル -->
+        <div class="tag-modal-section">
+          <h3>📂 中分類別集計 (クリックでフィルタ)</h3>
+          <div class="tag-modal-table-wrap">
+            <table class="tag-modal-table" id="modal-tag2-table">
+              <thead>
+                <tr>
+                  <th class="col-parent">大分類</th>
+                  <th class="col-name">中分類</th>
+                  <th class="col-num">数量</th>
+                  <th class="col-num">原価</th>
+                  <th class="col-num">売価</th>
+                  <th class="col-num">粗利</th>
+                  <th class="col-num">粗利率</th>
+                  <th class="col-bar">構成比</th>
+                  <th class="col-num" title="構成比×粗利率÷100">相乗積</th>
+                </tr>
+              </thead>
+              <tbody id="modal-tag2-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 小分類一覧テーブル -->
+        <div class="tag-modal-section">
+          <h3>🏷️ 小分類別集計</h3>
+          <div class="tag-modal-table-wrap">
+            <table class="tag-modal-table" id="modal-tag3-table">
+              <thead>
+                <tr>
+                  <th class="col-parent">大分類</th>
+                  <th class="col-parent">中分類</th>
+                  <th class="col-name">小分類</th>
+                  <th class="col-num">数量</th>
+                  <th class="col-num">原価</th>
+                  <th class="col-num">売価</th>
+                  <th class="col-num">粗利</th>
+                  <th class="col-num">粗利率</th>
+                  <th class="col-bar">構成比</th>
+                  <th class="col-num" title="構成比×粗利率÷100">相乗積</th>
+                </tr>
+              </thead>
+              <tbody id="modal-tag3-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="exportTagStats()">📊 Excel出力</button>
+        <button class="btn" onclick="closeTagStatsModal()">閉じる</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 選択ヒント -->
   <div id="selection-hint" class="selection-hint">
     <span id="selection-info"></span>
@@ -535,12 +620,18 @@
   <!-- ライブラリ -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-
   <!-- アプリケーションスクリプト -->
   <script type="module" src="js/app.js?v=20251211-10"></script>
+
+  <!-- Service Worker登録 -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('SW registered:', reg.scope))
+          .catch(err => console.log('SW registration failed:', err));
+      });
+    }
+  </script>
 </body>
 </html>

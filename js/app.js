@@ -1,13 +1,9 @@
-// Firebase imports
-import * as FirebaseSync from './firebase.js';
 // Database constants
 const DB_NAME = 'VegetableOrderDB';
 const DB_VERSION = 3;
 const STORE_NAME = 'savedData';
 // Database connection
 let db = null;
-// Long-press duration for cell range selection (ms)
-const LONG_PRESS_DURATION = 300;
 /**
  * Initialize IndexedDB database
  */
@@ -81,6 +77,27 @@ async function loadData(id) {
     });
 }
 /**
+ * Update (overwrite) data in IndexedDB
+ */
+async function updateData(id, name, data) {
+    return new Promise((resolve, reject) => {
+        if (!db) {
+            reject(new Error('Database not initialized'));
+            return;
+        }
+        const transaction = db.transaction(STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.put({
+            id,
+            name,
+            savedAt: new Date().toISOString(),
+            ...data
+        });
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+/**
  * Delete data from IndexedDB
  */
 async function deleteData(id) {
@@ -127,12 +144,300 @@ async function renderSavedList() {
 function toggleSavedList() { const l = document.getElementById('saved-list'), t = document.getElementById('saved-toggle'); l.classList.toggle('show'); t.textContent = l.classList.contains('show') ? '▲' : '▼'; }
 function toggleTagStats() { const b = document.getElementById('tag-stats-body'), t = document.getElementById('tag-stats-toggle'); b.classList.toggle('show'); t.textContent = b.classList.contains('show') ? '▲' : '▼'; }
 function toggleFilesBar() { const b = document.getElementById('files-bar-body'), t = document.getElementById('files-bar-toggle'); b.classList.toggle('show'); t.textContent = b.classList.contains('show') ? '▲' : '▼'; }
+
+// テーブル全画面表示
+function toggleTableFullscreen() {
+    const container = document.getElementById('table-container');
+    if (!container) {
+        console.error('table-container not found');
+        return;
+    }
+    const btn = container.querySelector('.btn-fullscreen');
+    container.classList.toggle('fullscreen');
+    if (container.classList.contains('fullscreen')) {
+        if (btn) btn.textContent = '✕ 閉じる';
+        document.body.style.overflow = 'hidden';
+    } else {
+        if (btn) btn.textContent = '⛶ 全画面';
+        document.body.style.overflow = '';
+    }
+}
+window.toggleTableFullscreen = toggleTableFullscreen;
+
+// タグ統計詳細モーダル
+function showTagStatsModal() {
+    try {
+        updateTagStatsModal();
+        document.getElementById('tag-stats-modal').classList.add('show');
+    } catch (e) {
+        console.error('showTagStatsModal error:', e);
+        showToast('データがありません');
+    }
+}
+window.showTagStatsModal = showTagStatsModal;
+
+function closeTagStatsModal() {
+    document.getElementById('tag-stats-modal').classList.remove('show');
+    modalSelectedTag1 = null; // フィルタをリセット
+    modalSelectedTag2 = null;
+}
+window.closeTagStatsModal = closeTagStatsModal;
+
+// モーダル用のフィルタ状態
+let modalSelectedTag1 = null;
+let modalSelectedTag2 = null;
+let modalTagData = { tag1Data: {}, tag2Data: {}, tag3Data: {}, grandTotal: { qty: 0, cost: 0, price: 0 } };
+
+function updateTagStatsModal() {
+    // 集計データを収集
+    const tag1Data = {};
+    const tag2Data = {};
+    const tag3Data = {};
+    let grandTotal = { qty: 0, cost: 0, price: 0 };
+
+    if (!currentProducts || currentProducts.length === 0) {
+        document.getElementById('modal-total-qty').textContent = '0';
+        document.getElementById('modal-total-cost').textContent = '¥0';
+        document.getElementById('modal-total-price').textContent = '¥0';
+        document.getElementById('modal-total-profit').textContent = '¥0';
+        document.getElementById('modal-total-margin').textContent = '0%';
+        document.getElementById('modal-tag1-tbody').innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;">データがありません</td></tr>';
+        document.getElementById('modal-tag2-tbody').innerHTML = '<tr><td colspan="9" style="text-align:center;color:#999;">データがありません</td></tr>';
+        document.getElementById('modal-tag3-tbody').innerHTML = '<tr><td colspan="10" style="text-align:center;color:#999;">データがありません</td></tr>';
+        return;
+    }
+
+    currentProducts.forEach(function (p) {
+        const t1 = getTag(p, 1) || '(未設定)';
+        const t2 = getTag(p, 2) || '(未設定)';
+        const t3 = getTag(p, 3) || '(未設定)';
+        const info = (productInfo[p] || {});
+        const qty = currentPivot[p] ? (currentPivot[p].total || 0) : 0;
+        const unit = info.unit || 1;
+        const cost = (info.cost || 0) * qty * unit;
+        const price = (info.price || 0) * qty * unit;
+
+        grandTotal.qty += qty;
+        grandTotal.cost += cost;
+        grandTotal.price += price;
+
+        // 大分類
+        if (!tag1Data[t1]) tag1Data[t1] = { qty: 0, cost: 0, price: 0 };
+        tag1Data[t1].qty += qty;
+        tag1Data[t1].cost += cost;
+        tag1Data[t1].price += price;
+
+        // 中分類
+        const t2Key = t1 + '|' + t2;
+        if (!tag2Data[t2Key]) tag2Data[t2Key] = { tag1: t1, tag2: t2, qty: 0, cost: 0, price: 0 };
+        tag2Data[t2Key].qty += qty;
+        tag2Data[t2Key].cost += cost;
+        tag2Data[t2Key].price += price;
+
+        // 小分類
+        const t3Key = t1 + '|' + t2 + '|' + t3;
+        if (!tag3Data[t3Key]) tag3Data[t3Key] = { tag1: t1, tag2: t2, tag3: t3, qty: 0, cost: 0, price: 0 };
+        tag3Data[t3Key].qty += qty;
+        tag3Data[t3Key].cost += cost;
+        tag3Data[t3Key].price += price;
+    });
+
+    // データをグローバルに保存
+    modalTagData = { tag1Data, tag2Data, tag3Data, grandTotal };
+
+    // フィルタをリセット
+    modalSelectedTag1 = null;
+    modalSelectedTag2 = null;
+
+    // テーブルを描画
+    renderTagStatsModalTables();
+}
+
+function renderTagStatsModalTables() {
+    const { tag1Data, tag2Data, tag3Data, grandTotal } = modalTagData;
+
+    // 粗利計算関数
+    function calcProfit(d) { return d.price - d.cost; }
+    function calcMargin(d) { return d.price > 0 ? ((d.price - d.cost) / d.price * 100) : 0; }
+    function calcComposition(d, total) { return total > 0 ? (d.qty / total * 100) : 0; }
+    // 相乗積 = 構成比 × 粗利率 / 100
+    function calcCrossRatio(d, total) {
+        const comp = calcComposition(d, total);
+        const margin = calcMargin(d);
+        return comp * margin / 100;
+    }
+
+    // フィルタに基づく基準値
+    let baseTotal = grandTotal;
+    if (modalSelectedTag1) {
+        baseTotal = tag1Data[modalSelectedTag1] || { qty: 0, cost: 0, price: 0 };
+    }
+
+    // サマリーカード更新
+    document.getElementById('modal-total-qty').textContent = baseTotal.qty.toLocaleString();
+    document.getElementById('modal-total-cost').textContent = '¥' + baseTotal.cost.toLocaleString();
+    document.getElementById('modal-total-price').textContent = '¥' + baseTotal.price.toLocaleString();
+    document.getElementById('modal-total-profit').textContent = '¥' + calcProfit(baseTotal).toLocaleString();
+    document.getElementById('modal-total-margin').textContent = calcMargin(baseTotal).toFixed(1) + '%';
+
+    // バーセルを生成する関数
+    function renderBarCell(value, max) {
+        const pct = max > 0 ? (value / max * 100) : 0;
+        return '<div class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width:' + pct.toFixed(1) + '%"></div></div><span class="bar-text">' + pct.toFixed(1) + '%</span></div>';
+    }
+
+    // 相乗積セルを生成
+    function renderCrossRatioCell(value) {
+        const color = value >= 5 ? '#2e7d32' : value >= 2 ? '#1976d2' : '#86868b';
+        return '<span style="color:' + color + ';font-weight:600;">' + value.toFixed(2) + '</span>';
+    }
+
+    // 大分類テーブル
+    const tag1Sorted = Object.keys(tag1Data).sort((a, b) => tag1Data[b].qty - tag1Data[a].qty);
+    let html1 = '';
+    tag1Sorted.forEach(function (t1) {
+        const d = tag1Data[t1];
+        const profit = calcProfit(d);
+        const profitClass = profit >= 0 ? 'positive' : 'negative';
+        const isSelected = modalSelectedTag1 === t1;
+        const rowClass = isSelected ? 'selected-row' : '';
+        const crossRatio = calcCrossRatio(d, grandTotal.qty);
+        html1 += '<tr class="' + rowClass + '" onclick="filterTagModal1(\'' + escapeHtml(t1).replace(/'/g, "\\'") + '\')" style="cursor:pointer;">';
+        html1 += '<td class="col-name">' + (isSelected ? '✓ ' : '') + escapeHtml(t1) + '</td>';
+        html1 += '<td class="col-num">' + d.qty.toLocaleString() + '</td>';
+        html1 += '<td class="col-num">¥' + d.cost.toLocaleString() + '</td>';
+        html1 += '<td class="col-num">¥' + d.price.toLocaleString() + '</td>';
+        html1 += '<td class="col-num ' + profitClass + '">¥' + profit.toLocaleString() + '</td>';
+        html1 += '<td class="col-num">' + calcMargin(d).toFixed(1) + '%</td>';
+        html1 += '<td class="col-bar">' + renderBarCell(d.qty, grandTotal.qty) + '</td>';
+        html1 += '<td class="col-num">' + renderCrossRatioCell(crossRatio) + '</td>';
+        html1 += '</tr>';
+    });
+    document.getElementById('modal-tag1-tbody').innerHTML = html1;
+
+    // 中分類テーブル（フィルタ適用）
+    let tag2Filtered = Object.keys(tag2Data);
+    if (modalSelectedTag1) {
+        tag2Filtered = tag2Filtered.filter(k => tag2Data[k].tag1 === modalSelectedTag1);
+    }
+    tag2Filtered.sort((a, b) => tag2Data[b].qty - tag2Data[a].qty);
+
+    let html2 = '';
+    if (tag2Filtered.length === 0) {
+        html2 = '<tr><td colspan="9" style="text-align:center;color:#999;">データがありません</td></tr>';
+    } else {
+        tag2Filtered.forEach(function (key) {
+            const d = tag2Data[key];
+            const profit = calcProfit(d);
+            const profitClass = profit >= 0 ? 'positive' : 'negative';
+            const isSelected = modalSelectedTag2 === key;
+            const rowClass = isSelected ? 'selected-row' : '';
+            const crossRatio = calcCrossRatio(d, baseTotal.qty);
+            html2 += '<tr class="' + rowClass + '" onclick="filterTagModal2(\'' + key.replace(/'/g, "\\'") + '\')" style="cursor:pointer;">';
+            html2 += '<td class="col-parent">' + escapeHtml(d.tag1) + '</td>';
+            html2 += '<td class="col-name">' + (isSelected ? '✓ ' : '') + escapeHtml(d.tag2) + '</td>';
+            html2 += '<td class="col-num">' + d.qty.toLocaleString() + '</td>';
+            html2 += '<td class="col-num">¥' + d.cost.toLocaleString() + '</td>';
+            html2 += '<td class="col-num">¥' + d.price.toLocaleString() + '</td>';
+            html2 += '<td class="col-num ' + profitClass + '">¥' + profit.toLocaleString() + '</td>';
+            html2 += '<td class="col-num">' + calcMargin(d).toFixed(1) + '%</td>';
+            html2 += '<td class="col-bar">' + renderBarCell(d.qty, baseTotal.qty) + '</td>';
+            html2 += '<td class="col-num">' + renderCrossRatioCell(crossRatio) + '</td>';
+            html2 += '</tr>';
+        });
+    }
+    document.getElementById('modal-tag2-tbody').innerHTML = html2;
+
+    // 小分類テーブル（フィルタ適用）
+    let tag3Filtered = Object.keys(tag3Data);
+    if (modalSelectedTag1) {
+        tag3Filtered = tag3Filtered.filter(k => tag3Data[k].tag1 === modalSelectedTag1);
+    }
+    if (modalSelectedTag2) {
+        const selectedT2 = tag2Data[modalSelectedTag2];
+        if (selectedT2) {
+            tag3Filtered = tag3Filtered.filter(k => tag3Data[k].tag1 === selectedT2.tag1 && tag3Data[k].tag2 === selectedT2.tag2);
+        }
+    }
+    tag3Filtered.sort((a, b) => tag3Data[b].qty - tag3Data[a].qty);
+
+    // 小分類の基準値（中分類選択時はその中分類の合計）
+    let tag3BaseTotal = baseTotal;
+    if (modalSelectedTag2 && tag2Data[modalSelectedTag2]) {
+        tag3BaseTotal = tag2Data[modalSelectedTag2];
+    }
+
+    let html3 = '';
+    if (tag3Filtered.length === 0) {
+        html3 = '<tr><td colspan="10" style="text-align:center;color:#999;">データがありません</td></tr>';
+    } else {
+        tag3Filtered.forEach(function (key) {
+            const d = tag3Data[key];
+            const profit = calcProfit(d);
+            const profitClass = profit >= 0 ? 'positive' : 'negative';
+            const crossRatio = calcCrossRatio(d, tag3BaseTotal.qty);
+            html3 += '<tr>';
+            html3 += '<td class="col-parent">' + escapeHtml(d.tag1) + '</td>';
+            html3 += '<td class="col-parent">' + escapeHtml(d.tag2) + '</td>';
+            html3 += '<td class="col-name">' + escapeHtml(d.tag3) + '</td>';
+            html3 += '<td class="col-num">' + d.qty.toLocaleString() + '</td>';
+            html3 += '<td class="col-num">¥' + d.cost.toLocaleString() + '</td>';
+            html3 += '<td class="col-num">¥' + d.price.toLocaleString() + '</td>';
+            html3 += '<td class="col-num ' + profitClass + '">¥' + profit.toLocaleString() + '</td>';
+            html3 += '<td class="col-num">' + calcMargin(d).toFixed(1) + '%</td>';
+            html3 += '<td class="col-bar">' + renderBarCell(d.qty, tag3BaseTotal.qty) + '</td>';
+            html3 += '<td class="col-num">' + renderCrossRatioCell(crossRatio) + '</td>';
+            html3 += '</tr>';
+        });
+    }
+    document.getElementById('modal-tag3-tbody').innerHTML = html3;
+
+    // セクションタイトルを更新
+    const h3Tag1 = document.querySelector('#modal-tag1-table').closest('.tag-modal-section').querySelector('h3');
+    const h3Tag2 = document.querySelector('#modal-tag2-table').closest('.tag-modal-section').querySelector('h3');
+    const h3Tag3 = document.querySelector('#modal-tag3-table').closest('.tag-modal-section').querySelector('h3');
+
+    h3Tag1.textContent = '📁 大分類別集計' + (modalSelectedTag1 ? '' : ' (クリックでフィルタ)');
+    h3Tag2.textContent = '📂 中分類別集計' + (modalSelectedTag1 ? ' [' + modalSelectedTag1 + ']' : '') + (modalSelectedTag2 ? '' : ' (クリックでフィルタ)');
+    h3Tag3.textContent = '🏷️ 小分類別集計' + (modalSelectedTag1 ? ' [' + modalSelectedTag1 + ']' : '') + (modalSelectedTag2 ? ' [' + tag2Data[modalSelectedTag2]?.tag2 + ']' : '');
+}
+
+function filterTagModal1(tag1) {
+    if (modalSelectedTag1 === tag1) {
+        modalSelectedTag1 = null; // 同じものをクリックで解除
+    } else {
+        modalSelectedTag1 = tag1;
+    }
+    modalSelectedTag2 = null; // 中分類フィルタをリセット
+    renderTagStatsModalTables();
+}
+window.filterTagModal1 = filterTagModal1;
+
+function filterTagModal2(key) {
+    if (modalSelectedTag2 === key) {
+        modalSelectedTag2 = null; // 同じものをクリックで解除
+    } else {
+        modalSelectedTag2 = key;
+    }
+    renderTagStatsModalTables();
+}
+window.filterTagModal2 = filterTagModal2;
 function showSaveModal() {
     if (loadedFiles.length === 0) {
         showToast('データがありません');
         return;
     }
-    document.getElementById('save-name').value = loadedFiles.map(f => f.name.replace(/\.[^.]+$/, '')).join(', ');
+    const infoEl = document.getElementById('current-save-info');
+    const overwriteBtn = document.getElementById('overwrite-btn');
+    if (currentSaveId && currentSaveName) {
+        infoEl.textContent = '現在のデータ: ' + currentSaveName;
+        document.getElementById('save-name').value = currentSaveName;
+        overwriteBtn.style.display = 'inline-block';
+    } else {
+        infoEl.textContent = '';
+        document.getElementById('save-name').value = loadedFiles.map(f => f.name.replace(/\.[^.]+$/, '')).join(', ');
+        overwriteBtn.style.display = 'none';
+    }
     document.getElementById('save-modal').classList.add('show');
 }
 function closeSaveModal() { document.getElementById('save-modal').classList.remove('show'); }
@@ -509,17 +814,14 @@ function saveCellEdit(product, date, newVal, td, originalVal) {
         return;
     }
     const cellKey = createCellKey(product, date, store);
-    // 元の値と異なる場合のみ編集履歴に記録
-    if (qty !== originalVal) {
-        if (!cellEdits[cellKey]) {
-            cellEdits[cellKey] = { original: originalVal, edited: qty };
-        }
-        else {
-            cellEdits[cellKey].edited = qty;
-        }
+    // 既存の編集履歴がある場合は、真の元の値を使用
+    const trueOriginal = cellEdits[cellKey] ? cellEdits[cellKey].original : originalVal;
+    // 真の元の値と異なる場合のみ編集履歴に記録
+    if (qty !== trueOriginal) {
+        cellEdits[cellKey] = { original: trueOriginal, edited: qty };
     }
     else {
-        // 元の値に戻した場合は編集履歴から削除
+        // 真の元の値に戻した場合は編集履歴から削除
         delete cellEdits[cellKey];
     }
     var found = false;
@@ -541,19 +843,58 @@ function saveCellEdit(product, date, newVal, td, originalVal) {
     }
     updateTable();
 }
-async function saveToDatabase() {
+// 現在読み込んでいる保存データのID（上書き保存用）
+let currentSaveId = null;
+let currentSaveName = null;
+
+async function saveToDatabase(overwrite = false) {
     const name = document.getElementById('save-name').value.trim();
     if (!name) {
         showToast('名前を入力してください');
         return;
     }
+    // 表示設定を収集
+    const displaySettings = {
+        showZero: document.getElementById('show-zero').checked,
+        showCost: document.getElementById('show-cost').checked,
+        showPrice: document.getElementById('show-price').checked,
+        showUnit: document.getElementById('show-unit').checked,
+        showTag1: document.getElementById('show-tag1').checked,
+        showTag2: document.getElementById('show-tag2').checked,
+        showTag3: document.getElementById('show-tag3').checked,
+        sortOrder: document.getElementById('sort-order').value,
+        sortOrder2: document.getElementById('sort-order2').value,
+        selectedStores: Array.from(selectedStores),
+        selectedSuppliers: Array.from(selectedSuppliers),
+        sliderFromIdx: sliderFromIdx,
+        sliderToIdx: sliderToIdx,
+        selectedFiles: Array.from(selectedFiles),
+        customFileOrder: [...customFileOrder]
+    };
+    const savePayload = {
+        loadedFiles,
+        productInfo,
+        allProducts,
+        productTags,
+        rawData,
+        cellEdits: { ...cellEdits },
+        displaySettings
+    };
     try {
-        await saveData(name, { loadedFiles, productInfo, allProducts, productTags });
+        if (overwrite && currentSaveId) {
+            await updateData(currentSaveId, name, savePayload);
+            showToast('✅ 上書き保存しました');
+        } else {
+            const newId = await saveData(name, savePayload);
+            currentSaveId = newId;
+            currentSaveName = name;
+            showToast('✅ 新規保存しました');
+        }
         closeSaveModal();
-        showToast('✅ 保存しました');
         renderSavedList();
     }
     catch (e) {
+        console.error('保存エラー:', e);
         showToast('❌ 保存に失敗しました');
     }
 }
@@ -568,10 +909,64 @@ async function loadFromDB(id) {
         productInfo = data.productInfo || {};
         allProducts = data.allProducts || [];
         productTags = data.productTags || {};
+        rawData = data.rawData || { data: [], stores: [], products: [], dates: [], suppliers: [] };
+        Object.keys(cellEdits).forEach(k => delete cellEdits[k]);
+        Object.assign(cellEdits, data.cellEdits || {});
+        currentSaveId = id;
+        currentSaveName = data.name || '';
         mergeAllData();
-        selectedFiles = new Set(loadedFiles.map(f => f.id));
+        // 表示設定を復元
+        const ds = data.displaySettings;
+        if (ds) {
+            // チェックボックス
+            document.getElementById('show-zero').checked = ds.showZero !== undefined ? ds.showZero : true;
+            document.getElementById('show-cost').checked = ds.showCost !== undefined ? ds.showCost : true;
+            document.getElementById('show-price').checked = ds.showPrice !== undefined ? ds.showPrice : true;
+            document.getElementById('show-unit').checked = ds.showUnit !== undefined ? ds.showUnit : true;
+            document.getElementById('show-tag1').checked = ds.showTag1 || false;
+            document.getElementById('show-tag2').checked = ds.showTag2 || false;
+            document.getElementById('show-tag3').checked = ds.showTag3 || false;
+            // 並び順
+            if (ds.sortOrder) document.getElementById('sort-order').value = ds.sortOrder;
+            if (ds.sortOrder2 !== undefined) document.getElementById('sort-order2').value = ds.sortOrder2;
+            // 選択ファイル
+            selectedFiles = ds.selectedFiles ? new Set(ds.selectedFiles) : new Set(loadedFiles.map(f => f.id));
+            // ファイル順序
+            customFileOrder = ds.customFileOrder || loadedFiles.map(f => f.id);
+            // 店舗・業者の選択
+            selectedStores = ds.selectedStores ? new Set(ds.selectedStores) : new Set(rawData.stores);
+            selectedSuppliers = ds.selectedSuppliers ? new Set(ds.selectedSuppliers) : new Set(rawData.suppliers);
+            // 日付スライダー
+            if (ds.sliderFromIdx !== undefined) sliderFromIdx = ds.sliderFromIdx;
+            if (ds.sliderToIdx !== undefined) sliderToIdx = ds.sliderToIdx;
+        } else {
+            selectedFiles = new Set(loadedFiles.map(f => f.id));
+        }
         updateFileChips();
         initUI();
+        // 表示設定をUIに反映（initUI後に再適用）
+        if (ds) {
+            // スライダーの値を設定
+            const maxVal = Math.max(0, allDatesRaw.length - 1);
+            sliderFromIdx = Math.min(ds.sliderFromIdx || 0, maxVal);
+            sliderToIdx = Math.min(ds.sliderToIdx || maxVal, maxVal);
+            document.getElementById('slider-from').value = String(sliderFromIdx);
+            document.getElementById('slider-to').value = String(sliderToIdx);
+            document.getElementById('slider-from-label').textContent = allDatesRaw[sliderFromIdx] || '-';
+            document.getElementById('slider-to-label').textContent = allDatesRaw[sliderToIdx] || '-';
+            // 店舗・業者のチェックボックスを更新
+            document.querySelectorAll('#store-list input').forEach(cb => {
+                const store = cb.value;
+                cb.checked = selectedStores.has(store);
+                cb.parentElement.classList.toggle('selected', cb.checked);
+            });
+            document.querySelectorAll('#supplier-list input').forEach(cb => {
+                const supplier = cb.value;
+                cb.checked = selectedSuppliers.has(supplier);
+                cb.parentElement.classList.toggle('selected', cb.checked);
+            });
+            updateTable();
+        }
         dropZone.style.display = 'none';
         document.getElementById('files-bar').classList.add('show');
         document.getElementById('main-content').classList.add('show');
@@ -600,6 +995,8 @@ function showToast(msg) { const t = document.getElementById('toast'); t.textCont
 // ============================================================================
 /** Loaded Excel files */
 let loadedFiles = [];
+/** Custom file order for sorting (array of file IDs) */
+let customFileOrder = [];
 /** Raw data from all files */
 let rawData = {
     data: [],
@@ -652,8 +1049,6 @@ let selectedCells = new Set();
 let isDraggingCells = false;
 /** Cell drag start position {row, col} */
 let cellDragStart = null;
-/** Cell drag timer ID */
-let cellDragTimer = null;
 /** Calendar current year and month for add product modal */
 let calendarYear = new Date().getFullYear();
 let calendarMonth = new Date().getMonth(); // 0-11
@@ -751,6 +1146,13 @@ function finishLoading() {
     }
     mergeAllData();
     selectedFiles = new Set(loadedFiles.map(f => f.id));
+    // 新規ファイルをcustomFileOrderに追加
+    const existingIds = new Set(customFileOrder);
+    loadedFiles.forEach(f => {
+        if (!existingIds.has(f.id)) {
+            customFileOrder.push(f.id);
+        }
+    });
     updateFileChips();
     initUI();
     document.getElementById('files-bar').classList.add('show');
@@ -905,12 +1307,13 @@ function updateFileChips() {
 function updateFileFilterList() {
     document.getElementById('file-filter-list').innerHTML = loadedFiles.map(f => '<label class="checkbox-item ' + (selectedFiles.has(f.id) ? 'selected' : '') + '"><input type="checkbox" ' + (selectedFiles.has(f.id) ? 'checked' : '') + ' onchange="toggleFileFilter(\'' + f.id + '\',this)"> ' + escapeHtml(f.name) + '</label>').join('');
 }
-function removeFile(id) { loadedFiles = loadedFiles.filter(f => f.id != id); selectedFiles.delete(id); if (loadedFiles.length === 0) {
+function removeFile(id) { const numId = Number(id); loadedFiles = loadedFiles.filter(f => f.id !== numId); selectedFiles.delete(numId); customFileOrder = customFileOrder.filter(fid => fid !== numId); if (loadedFiles.length === 0) {
     clearAllFiles();
     return;
 } mergeAllData(); updateFileChips(); initUI(); document.getElementById('file-filter-panel').style.display = loadedFiles.length > 1 ? 'block' : 'none'; }
 function clearAllFiles() {
     loadedFiles = [];
+    customFileOrder = [];
     rawData = { data: [], stores: [], products: [], dates: [], suppliers: [] };
     productInfo = {};
     productTags = {};
@@ -923,7 +1326,7 @@ function clearAllFiles() {
     document.getElementById('files-bar').classList.remove('show');
     document.getElementById('main-content').classList.remove('show');
 }
-function toggleFileFilter(id, cb) { cb.checked ? selectedFiles.add(id) : selectedFiles.delete(id); cb.parentElement.classList.toggle('selected', cb.checked); updateTable(); }
+function toggleFileFilter(id, cb) { const numId = Number(id); cb.checked ? selectedFiles.add(numId) : selectedFiles.delete(numId); cb.parentElement.classList.toggle('selected', cb.checked); updateTable(); }
 function selectAllFiles() { selectedFiles = new Set(loadedFiles.map(f => f.id)); document.querySelectorAll('#file-filter-list input').forEach(cb => { cb.checked = true; cb.parentElement.classList.add('selected'); }); updateTable(); }
 function clearAllFileFilters() { selectedFiles = new Set(); document.querySelectorAll('#file-filter-list input').forEach(cb => { cb.checked = false; cb.parentElement.classList.remove('selected'); }); updateTable(); }
 function extractProductName(raw) {
@@ -953,6 +1356,7 @@ function initUI() {
 }
 function toggleDropdown(type) { const dd = document.getElementById(type + '-dropdown'), isOpen = dd.classList.contains('show'); document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.remove('show')); if (!isOpen)
     dd.classList.add('show'); }
+function closeDropdown(type) { const dd = document.getElementById(type + '-dropdown'); if (dd) dd.classList.remove('show'); }
 function toggleStore(s, cb) { cb.checked ? selectedStores.add(s) : selectedStores.delete(s); cb.parentElement.classList.toggle('selected', cb.checked); updateTable(); }
 function toggleSupplier(s, cb) { cb.checked ? selectedSuppliers.add(s) : selectedSuppliers.delete(s); cb.parentElement.classList.toggle('selected', cb.checked); updateTable(); }
 function selectAllStores() { selectedStores = new Set(rawData.stores); document.querySelectorAll('#store-list input').forEach(cb => { cb.checked = true; cb.parentElement.classList.add('selected'); }); updateTable(); }
@@ -1015,7 +1419,17 @@ function importTags(input) {
                 const prod = String(row[prodCol] || '').trim();
                 if (!prod)
                     continue;
-                const matchedProd = allProducts.find(p => p.indexOf(prod) >= 0 || prod.indexOf(p) >= 0);
+                // まず完全一致を試み、なければ部分一致にフォールバック
+                let matchedProd = allProducts.find(p => p === prod);
+                if (!matchedProd) {
+                    // 部分一致の場合は最も短い一致（最も具体的な一致）を優先
+                    const partialMatches = allProducts.filter(p => p.indexOf(prod) >= 0 || prod.indexOf(p) >= 0);
+                    if (partialMatches.length > 0) {
+                        // インポート名との文字数差が最も小さいものを選択
+                        partialMatches.sort((a, b) => Math.abs(a.length - prod.length) - Math.abs(b.length - prod.length));
+                        matchedProd = partialMatches[0];
+                    }
+                }
                 if (matchedProd) {
                     if (!productTags[matchedProd])
                         productTags[matchedProd] = {};
@@ -1080,6 +1494,8 @@ function importTags(input) {
 function updateTagStats() {
     const hierarchy = {};
     const noTag1 = { tag2s: {}, noTag2: {} };
+    let grandTotal = { qty: 0, cost: 0, price: 0 };
+
     currentProducts.forEach(function (p) {
         const t1 = getTag(p, 1), t2 = getTag(p, 2), t3 = getTag(p, 3);
         const info = (productInfo[p] || {});
@@ -1087,6 +1503,11 @@ function updateTagStats() {
         const unit = info.unit || 1;
         const cost = (info.cost || 0) * qty * unit;
         const price = (info.price || 0) * qty * unit;
+
+        grandTotal.qty += qty;
+        grandTotal.cost += cost;
+        grandTotal.price += price;
+
         if (t1) {
             if (!hierarchy[t1])
                 hierarchy[t1] = { _total: { qty: 0, cost: 0, price: 0 }, _children: {} };
@@ -1130,43 +1551,199 @@ function updateTagStats() {
             noTag1.noTag2[t3].price += price;
         }
     });
-    const tbody = document.getElementById('tag-stats-tbody');
+
+    // サマリーカードを更新
+    function calcMargin(d) { return d.price > 0 ? ((d.price - d.cost) / d.price * 100).toFixed(1) : 0; }
+    document.getElementById('tag-total-qty').textContent = grandTotal.qty.toLocaleString();
+    document.getElementById('tag-total-cost').textContent = '¥' + grandTotal.cost.toLocaleString();
+    document.getElementById('tag-total-price').textContent = '¥' + grandTotal.price.toLocaleString();
+    document.getElementById('tag-total-margin').textContent = calcMargin(grandTotal) + '%';
+
+    // アコーディオンを更新
+    const accordion = document.getElementById('tag-accordion');
     const t1s = Object.keys(hierarchy).sort();
     const hasOrphans = Object.keys(noTag1.tag2s).length > 0 || Object.keys(noTag1.noTag2).length > 0;
+
     if (t1s.length === 0 && !hasOrphans) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:0.5;">タグが設定されていません</td></tr>';
+        accordion.innerHTML = '<div class="tag-empty">タグが設定されていません</div>';
         return;
     }
-    function calcMargin(d) { return d.price > 0 ? ((d.price - d.cost) / d.price * 100).toFixed(1) : 0; }
-    var html = '';
+
+    function renderStats(d, showProgress, maxQty) {
+        const progressPct = maxQty > 0 ? (d.qty / maxQty * 100) : 0;
+        let html = '<div class="tag-stat-item"><span class="tag-stat-label">数量</span><span class="tag-stat-value qty">' + d.qty.toLocaleString() + '</span></div>';
+        html += '<div class="tag-stat-item"><span class="tag-stat-label">原価</span><span class="tag-stat-value cost">¥' + d.cost.toLocaleString() + '</span></div>';
+        html += '<div class="tag-stat-item"><span class="tag-stat-label">売価</span><span class="tag-stat-value price">¥' + d.price.toLocaleString() + '</span></div>';
+        html += '<div class="tag-stat-item"><span class="tag-stat-label">粗利</span><span class="tag-stat-value margin">' + calcMargin(d) + '%</span></div>';
+        return html;
+    }
+
+    function renderSmallStats(d) {
+        return '<span class="tag-stat-value qty">' + d.qty.toLocaleString() + '</span>' +
+               '<span class="tag-stat-value cost">¥' + d.cost.toLocaleString() + '</span>' +
+               '<span class="tag-stat-value price">¥' + d.price.toLocaleString() + '</span>' +
+               '<span class="tag-stat-value margin">' + calcMargin(d) + '%</span>';
+    }
+
+    let html = '';
+    let catIndex = 0;
+
     t1s.forEach(function (t1) {
         const d1 = hierarchy[t1]._total;
-        html += '<tr class="parent-row"><td><span class="tag-label tag1">📁 ' + escapeHtml(t1) + '</span></td><td class="num">' + d1.qty.toLocaleString() + '</td><td class="num">¥' + d1.cost.toLocaleString() + '</td><td class="num">¥' + d1.price.toLocaleString() + '</td><td class="num">' + calcMargin(d1) + '%</td></tr>';
-        Object.keys(hierarchy[t1]._children).sort().forEach(function (t2) {
-            const d2 = hierarchy[t1]._children[t2]._total;
-            html += '<tr class="child-row"><td>├ ' + escapeHtml(t2) + '</td><td class="num">' + d2.qty.toLocaleString() + '</td><td class="num">¥' + d2.cost.toLocaleString() + '</td><td class="num">¥' + d2.price.toLocaleString() + '</td><td class="num">' + calcMargin(d2) + '%</td></tr>';
-            Object.keys(hierarchy[t1]._children[t2]._children).sort().forEach(function (t3) {
-                const d3 = hierarchy[t1]._children[t2]._children[t3];
-                html += '<tr class="grandchild-row"><td>│ └ ' + escapeHtml(t3) + '</td><td class="num">' + d3.qty.toLocaleString() + '</td><td class="num">¥' + d3.cost.toLocaleString() + '</td><td class="num">¥' + d3.price.toLocaleString() + '</td><td class="num">' + calcMargin(d3) + '%</td></tr>';
+        const progressPct = grandTotal.qty > 0 ? (d1.qty / grandTotal.qty * 100) : 0;
+        const t2Keys = Object.keys(hierarchy[t1]._children).sort();
+        const hasChildren = t2Keys.length > 0;
+
+        html += '<div class="tag-category" data-cat="' + catIndex + '">';
+        html += '<div class="tag-category-header" onclick="toggleTagCategory(' + catIndex + ', event)">';
+        html += '<span class="tag-category-toggle">▶</span>';
+        html += '<span class="tag-category-name"><span class="icon">📁</span>' + escapeHtml(t1) + '</span>';
+        html += '<div class="tag-category-stats">' + renderStats(d1, false, grandTotal.qty) + '</div>';
+        html += '</div>';
+        html += '<div class="tag-progress-bar"><div class="tag-progress-fill" style="width:' + progressPct + '%"></div></div>';
+
+        if (hasChildren) {
+            html += '<div class="tag-category-content">';
+            t2Keys.forEach(function (t2, subIndex) {
+                const d2 = hierarchy[t1]._children[t2]._total;
+                const t3Keys = Object.keys(hierarchy[t1]._children[t2]._children).sort();
+                const hasGrandChildren = t3Keys.length > 0;
+                const subId = catIndex + '-' + subIndex;
+
+                html += '<div class="tag-subcategory" data-sub="' + subId + '">';
+                html += '<div class="tag-subcategory-header" onclick="toggleTagSubcategory(\'' + subId + '\', event)">';
+                if (hasGrandChildren) {
+                    html += '<span class="tag-subcategory-toggle">▶</span>';
+                } else {
+                    html += '<span class="tag-subcategory-toggle" style="visibility:hidden">▶</span>';
+                }
+                html += '<span class="tag-subcategory-name">├ ' + escapeHtml(t2) + '</span>';
+                html += '<div class="tag-subcategory-stats">' + renderSmallStats(d2) + '</div>';
+                html += '</div>';
+
+                if (hasGrandChildren) {
+                    html += '<div class="tag-subcategory-content">';
+                    t3Keys.forEach(function (t3) {
+                        const d3 = hierarchy[t1]._children[t2]._children[t3];
+                        html += '<div class="tag-item">';
+                        html += '<span class="tag-item-name">└ ' + escapeHtml(t3) + '</span>';
+                        html += '<div class="tag-item-stats">' + renderSmallStats(d3) + '</div>';
+                        html += '</div>';
+                    });
+                    html += '</div>';
+                }
+                html += '</div>';
             });
-        });
+            html += '</div>';
+        }
+        html += '</div>';
+        catIndex++;
     });
+
+    // 未分類
     if (hasOrphans) {
-        html += '<tr class="parent-row"><td><span class="tag-no-parent">📂 (未分類)</span></td><td class="num">-</td><td class="num">-</td><td class="num">-</td><td class="num">-</td></tr>';
-        Object.keys(noTag1.tag2s).sort().forEach(function (t2) {
+        const orphanQty = Object.values(noTag1.tag2s).reduce((sum, v) => sum + v._total.qty, 0) +
+                          Object.values(noTag1.noTag2).reduce((sum, v) => sum + v.qty, 0);
+        const orphanCost = Object.values(noTag1.tag2s).reduce((sum, v) => sum + v._total.cost, 0) +
+                           Object.values(noTag1.noTag2).reduce((sum, v) => sum + v.cost, 0);
+        const orphanPrice = Object.values(noTag1.tag2s).reduce((sum, v) => sum + v._total.price, 0) +
+                            Object.values(noTag1.noTag2).reduce((sum, v) => sum + v.price, 0);
+        const orphanData = { qty: orphanQty, cost: orphanCost, price: orphanPrice };
+        const progressPct = grandTotal.qty > 0 ? (orphanQty / grandTotal.qty * 100) : 0;
+
+        html += '<div class="tag-category" data-cat="' + catIndex + '">';
+        html += '<div class="tag-category-header" onclick="toggleTagCategory(' + catIndex + ', event)">';
+        html += '<span class="tag-category-toggle">▶</span>';
+        html += '<span class="tag-category-name"><span class="icon">📂</span>(未分類)</span>';
+        html += '<div class="tag-category-stats">' + renderStats(orphanData, false, grandTotal.qty) + '</div>';
+        html += '</div>';
+        html += '<div class="tag-progress-bar"><div class="tag-progress-fill" style="width:' + progressPct + '%"></div></div>';
+
+        html += '<div class="tag-category-content">';
+
+        Object.keys(noTag1.tag2s).sort().forEach(function (t2, subIndex) {
             const d2 = noTag1.tag2s[t2]._total;
-            html += '<tr class="child-row"><td>├ ' + escapeHtml(t2) + '</td><td class="num">' + d2.qty.toLocaleString() + '</td><td class="num">¥' + d2.cost.toLocaleString() + '</td><td class="num">¥' + d2.price.toLocaleString() + '</td><td class="num">' + calcMargin(d2) + '%</td></tr>';
-            Object.keys(noTag1.tag2s[t2]._children).sort().forEach(function (t3) {
-                const d3 = noTag1.tag2s[t2]._children[t3];
-                html += '<tr class="grandchild-row"><td>│ └ ' + escapeHtml(t3) + '</td><td class="num">' + d3.qty.toLocaleString() + '</td><td class="num">¥' + d3.cost.toLocaleString() + '</td><td class="num">¥' + d3.price.toLocaleString() + '</td><td class="num">' + calcMargin(d3) + '%</td></tr>';
-            });
+            const t3Keys = Object.keys(noTag1.tag2s[t2]._children).sort();
+            const hasGrandChildren = t3Keys.length > 0;
+            const subId = catIndex + '-' + subIndex;
+
+            html += '<div class="tag-subcategory" data-sub="' + subId + '">';
+            html += '<div class="tag-subcategory-header" onclick="toggleTagSubcategory(\'' + subId + '\', event)">';
+            if (hasGrandChildren) {
+                html += '<span class="tag-subcategory-toggle">▶</span>';
+            } else {
+                html += '<span class="tag-subcategory-toggle" style="visibility:hidden">▶</span>';
+            }
+            html += '<span class="tag-subcategory-name">├ ' + escapeHtml(t2) + '</span>';
+            html += '<div class="tag-subcategory-stats">' + renderSmallStats(d2) + '</div>';
+            html += '</div>';
+
+            if (hasGrandChildren) {
+                html += '<div class="tag-subcategory-content">';
+                t3Keys.forEach(function (t3) {
+                    const d3 = noTag1.tag2s[t2]._children[t3];
+                    html += '<div class="tag-item">';
+                    html += '<span class="tag-item-name">└ ' + escapeHtml(t3) + '</span>';
+                    html += '<div class="tag-item-stats">' + renderSmallStats(d3) + '</div>';
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+            html += '</div>';
         });
+
         Object.keys(noTag1.noTag2).sort().forEach(function (t3) {
             const d3 = noTag1.noTag2[t3];
-            html += '<tr class="grandchild-row"><td>└ ' + escapeHtml(t3) + '</td><td class="num">' + d3.qty.toLocaleString() + '</td><td class="num">¥' + d3.cost.toLocaleString() + '</td><td class="num">¥' + d3.price.toLocaleString() + '</td><td class="num">' + calcMargin(d3) + '%</td></tr>';
+            html += '<div class="tag-item" style="padding-left:32px;">';
+            html += '<span class="tag-item-name">└ ' + escapeHtml(t3) + '</span>';
+            html += '<div class="tag-item-stats">' + renderSmallStats(d3) + '</div>';
+            html += '</div>';
         });
+
+        html += '</div>';
+        html += '</div>';
     }
-    tbody.innerHTML = html;
+
+    accordion.innerHTML = html;
+}
+
+function toggleTagCategory(index, event) {
+    if (event) event.stopPropagation();
+    const cat = document.querySelector('.tag-category[data-cat="' + index + '"]');
+    if (cat) {
+        cat.classList.toggle('expanded');
+    }
+}
+window.toggleTagCategory = toggleTagCategory;
+
+function toggleTagSubcategory(id, event) {
+    if (event) event.stopPropagation();
+    const sub = document.querySelector('.tag-subcategory[data-sub="' + id + '"]');
+    if (sub) {
+        sub.classList.toggle('expanded');
+    }
+}
+window.toggleTagSubcategory = toggleTagSubcategory;
+// ヘッダークリックでソート切り替え
+function toggleSort(key) {
+    const select = document.getElementById('sort-order');
+    const current = select.value;
+    // 同じキーをクリックした場合は昇順/降順を切り替え
+    if (current === key) {
+        select.value = key + '-desc';
+    } else if (current === key + '-desc') {
+        select.value = key;
+    } else if (current === key + '-asc') {
+        select.value = key + '-desc';
+    } else {
+        // 新しいキーの場合は降順から開始（数量、原価、売価は多い順が便利）
+        if (key === 'qty' || key === 'cost' || key === 'price') {
+            select.value = key + '-desc';
+        } else {
+            select.value = key;
+        }
+    }
+    updateTable();
 }
 function updateTable() {
     if (rawData.data.length === 0)
@@ -1183,7 +1760,10 @@ function updateTable() {
     const st = document.getElementById('search-input').value;
     const pivot = {}, dateTotals = {};
     dates.forEach(function (d) { dateTotals[d] = 0; });
-    const relProds = showZero ? allProducts.filter(function (p) { return st === '' || p.indexOf(st) >= 0; }) : [];
+    // 選択されたファイルに含まれる商品のみを対象にする
+    const selectedFileNames = new Set(loadedFiles.filter(f => selectedFiles.has(f.id)).map(f => f.name));
+    const productsInSelectedFiles = new Set(rawData.data.filter(i => selectedFileNames.has(i.fileName)).map(i => i.product));
+    const relProds = showZero ? allProducts.filter(function (p) { return productsInSelectedFiles.has(p) && (st === '' || p.indexOf(st) >= 0); }) : [];
     relProds.forEach(function (p) { pivot[p] = { total: 0 }; dates.forEach(function (d) { pivot[p][d] = 0; }); });
     filtered.forEach(function (i) {
         if (!pivot[i.product]) {
@@ -1197,29 +1777,65 @@ function updateTable() {
     currentPivot = pivot;
     var products = Object.keys(pivot);
     const sortOrder = document.getElementById('sort-order').value;
-    if (sortOrder === 'tag') {
-        products.sort(function (a, b) {
-            const t1a = getTag(a, 1) || '\uffff', t1b = getTag(b, 1) || '\uffff';
-            if (t1a !== t1b)
-                return t1a.localeCompare(t1b, 'ja');
-            const t2a = getTag(a, 2) || '\uffff', t2b = getTag(b, 2) || '\uffff';
-            if (t2a !== t2b)
-                return t2a.localeCompare(t2b, 'ja');
-            const t3a = getTag(a, 3) || '\uffff', t3b = getTag(b, 3) || '\uffff';
-            if (t3a !== t3b)
-                return t3a.localeCompare(t3b, 'ja');
-            return a.localeCompare(b, 'ja');
-        });
+    const sortOrder2 = document.getElementById('sort-order2').value;
+    // 比較関数を生成するヘルパー
+    function getCompareFunc(key) {
+        switch (key) {
+            case 'tag':
+                return function (a, b) {
+                    const t1a = getTag(a, 1) || '\uffff', t1b = getTag(b, 1) || '\uffff';
+                    if (t1a !== t1b) return t1a.localeCompare(t1b, 'ja');
+                    const t2a = getTag(a, 2) || '\uffff', t2b = getTag(b, 2) || '\uffff';
+                    if (t2a !== t2b) return t2a.localeCompare(t2b, 'ja');
+                    const t3a = getTag(a, 3) || '\uffff', t3b = getTag(b, 3) || '\uffff';
+                    return t3a.localeCompare(t3b, 'ja');
+                };
+            case 'qty-desc':
+                return function (a, b) { return (pivot[b].total || 0) - (pivot[a].total || 0); };
+            case 'qty-asc':
+                return function (a, b) { return (pivot[a].total || 0) - (pivot[b].total || 0); };
+            case 'cost-desc':
+                return function (a, b) { return ((productInfo[b] || {}).cost || 0) - ((productInfo[a] || {}).cost || 0); };
+            case 'cost-asc':
+                return function (a, b) { return ((productInfo[a] || {}).cost || 0) - ((productInfo[b] || {}).cost || 0); };
+            case 'price-desc':
+                return function (a, b) { return ((productInfo[b] || {}).price || 0) - ((productInfo[a] || {}).price || 0); };
+            case 'price-asc':
+                return function (a, b) { return ((productInfo[a] || {}).price || 0) - ((productInfo[b] || {}).price || 0); };
+            case 'name-desc':
+                return function (a, b) { return b.localeCompare(a, 'ja'); };
+            case 'file':
+                // customFileOrderに基づいてファイル順の商品インデックスを構築
+                const fileOrderMap = {};
+                const fileIdToName = {};
+                loadedFiles.forEach(f => { fileIdToName[f.id] = f.name; });
+                const orderedFileIds = customFileOrder.length > 0 ? customFileOrder : loadedFiles.map(f => f.id);
+                let orderIdx = 0;
+                orderedFileIds.forEach(fileId => {
+                    const fileName = fileIdToName[fileId];
+                    if (!fileName) return;
+                    rawData.data.forEach(item => {
+                        if (item.fileName === fileName && fileOrderMap[item.product] === undefined) {
+                            fileOrderMap[item.product] = orderIdx++;
+                        }
+                    });
+                });
+                return function (a, b) {
+                    const idxA = fileOrderMap[a] !== undefined ? fileOrderMap[a] : 9999;
+                    const idxB = fileOrderMap[b] !== undefined ? fileOrderMap[b] : 9999;
+                    return idxA - idxB;
+                };
+            default: // 'name' or default
+                return function (a, b) { return a.localeCompare(b, 'ja'); };
+        }
     }
-    else if (sortOrder === 'qty-desc') {
-        products.sort(function (a, b) { return (pivot[b].total || 0) - (pivot[a].total || 0); });
-    }
-    else if (sortOrder === 'qty-asc') {
-        products.sort(function (a, b) { return (pivot[a].total || 0) - (pivot[b].total || 0); });
-    }
-    else {
-        products.sort(function (a, b) { return a.localeCompare(b, 'ja'); });
-    }
+    const compare1 = getCompareFunc(sortOrder);
+    const compare2 = sortOrder2 ? getCompareFunc(sortOrder2) : null;
+    products.sort(function (a, b) {
+        const result1 = compare1(a, b);
+        if (result1 !== 0 || !compare2) return result1;
+        return compare2(a, b);
+    });
     if (!showZero)
         products = products.filter(function (p) { return pivot[p].total > 0; });
     currentProducts = products;
@@ -1243,21 +1859,26 @@ function updateTable() {
     document.getElementById('supplier-btn-text').textContent = selectedSuppliers.size === rawData.suppliers.length ? '全選択' : selectedSuppliers.size + '件';
     document.getElementById('file-btn-text').textContent = selectedFiles.size === loadedFiles.length ? '全選択' : selectedFiles.size + '件';
     const thead = document.querySelector('#data-table thead');
-    var hdr = '<tr><th class="product">品目名</th>';
+    const sortIndicator = function(key) {
+        if (sortOrder === key || sortOrder === key + '-asc') return ' ▲';
+        if (sortOrder === key + '-desc') return ' ▼';
+        return '';
+    };
+    var hdr = '<tr><th class="product sortable" onclick="toggleSort(\'name\')">品目名' + sortIndicator('name') + '</th>';
     if (showTag1)
-        hdr += '<th class="tag tag1">#大分類</th>';
+        hdr += '<th class="tag tag1 sortable" onclick="toggleSort(\'tag\')">#大分類' + (sortOrder === 'tag' ? ' ▲' : '') + '</th>';
     if (showTag2)
         hdr += '<th class="tag tag2">#中分類</th>';
     if (showTag3)
         hdr += '<th class="tag tag3">#小分類</th>';
     if (showCost)
-        hdr += '<th class="info-cost">原価</th>';
+        hdr += '<th class="info-cost sortable" onclick="toggleSort(\'cost\')">原価' + sortIndicator('cost') + '</th>';
     if (showPrice)
-        hdr += '<th class="info-price">売価</th>';
+        hdr += '<th class="info-price sortable" onclick="toggleSort(\'price\')">売価' + sortIndicator('price') + '</th>';
     if (showUnit)
         hdr += '<th class="info">入数</th>';
     dates.forEach(function (d, i) { hdr += '<th class="date-col" data-col="' + i + '">' + d + '</th>'; });
-    hdr += '<th class="total">計</th><th class="del-col">削除</th></tr>';
+    hdr += '<th class="total sortable" onclick="toggleSort(\'qty\')">計' + sortIndicator('qty') + '</th><th class="del-col">削除</th></tr>';
     thead.innerHTML = hdr;
     const tbody = document.querySelector('#data-table tbody');
     if (products.length === 0) {
@@ -1272,7 +1893,8 @@ function updateTable() {
     products.forEach(function (p, ri) {
         const row = pivot[p], info = (productInfo[p] || {});
         const pEsc = p.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        html += '<tr data-row="' + ri + '" data-product="' + pEsc + '"><td class="product" data-row="' + ri + '">' + escapeHtml(p) + '</td>';
+        const rowClass = (showZero && row.total === 0) ? ' no-delivery-row' : '';
+        html += '<tr data-row="' + ri + '" data-product="' + pEsc + '" class="' + rowClass + '"><td class="product" data-row="' + ri + '">' + escapeHtml(p) + '</td>';
         if (showTag1)
             html += '<td class="tag tag1"><input type="text" value="' + escapeHtml(getTag(p, 1)) + '" onchange="setTag(\'' + pEsc + '\', 1, this.value)" placeholder="大"></td>';
         if (showTag2)
@@ -1294,6 +1916,8 @@ function updateTable() {
             var cellClass = 'value';
             if (v > 0)
                 cellClass += ' has-value';
+            else if (showZero && row.total === 0)
+                cellClass += ' no-delivery';
             if (isEdited)
                 cellClass += ' edited';
             if (canEdit)
@@ -1392,14 +2016,13 @@ function setupSelection() {
                 return; // 編集中は無視
             if (e.button !== 0)
                 return; // 左クリックのみ
-            cellDragTimer = window.setTimeout(function () {
-                isDraggingCells = true;
-                selectedCells.clear();
-                cellDragStart = { row: parseInt(td.dataset.row), col: parseInt(td.dataset.col) };
-                const cellKey = td.dataset.row + '-' + td.dataset.col;
-                selectedCells.add(cellKey);
-                applyCellSelection();
-            }, LONG_PRESS_DURATION);
+            // 即座にドラッグ選択を開始（長押し不要）
+            isDraggingCells = true;
+            selectedCells.clear();
+            cellDragStart = { row: parseInt(td.dataset.row), col: parseInt(td.dataset.col) };
+            const cellKey = td.dataset.row + '-' + td.dataset.col;
+            selectedCells.add(cellKey);
+            applyCellSelection();
         };
         td.onmouseenter = function (e) {
             if (isDraggingCells && cellDragStart) {
@@ -1416,12 +2039,6 @@ function setupSelection() {
                     }
                 }
                 applyCellSelection();
-            }
-        };
-        td.onmouseup = function (e) {
-            if (cellDragTimer) {
-                clearTimeout(cellDragTimer);
-                cellDragTimer = null;
             }
         };
     });
@@ -1466,10 +2083,7 @@ document.addEventListener('mouseup', function () {
         document.body.style.cursor = '';
     }
 });
-document.getElementById('table-scroll').onmouseup = function () { isDraggingCol = isDraggingRow = isDraggingCells = false; if (cellDragTimer) {
-    clearTimeout(cellDragTimer);
-    cellDragTimer = null;
-} };
+document.getElementById('table-scroll').onmouseup = function () { isDraggingCol = isDraggingRow = isDraggingCells = false; };
 document.onmousemove = function (e) { if ((hasSelection() || selectedCells.size > 0) && !e.target.closest('.date-slider-track'))
     updateTooltip(e); };
 function toggleCol(c) { selectedCols.has(c) ? selectedCols.delete(c) : selectedCols.add(c); }
@@ -1536,12 +2150,13 @@ function updateTooltip(e) {
             if (!p || !d)
                 return;
             const info = (productInfo[p] || {});
+            const unit = info.unit || 1;
             const q = currentPivot[p] ? (currentPivot[p][d] || 0) : 0;
             tQty += q;
             if (info.cost)
-                tCost += q * info.cost;
+                tCost += q * info.cost * unit;
             if (info.price)
-                tPrice += q * info.price;
+                tPrice += q * info.price * unit;
         });
         dateStrs = Array.from(cellCols).sort(function (a, b) { return a - b; }).map(function (c) { return currentDates[c]; }).filter(Boolean);
         prodNames = Array.from(cellRows).sort(function (a, b) { return a - b; }).map(function (r) { return currentProducts[r]; }).filter(Boolean);
@@ -1556,6 +2171,7 @@ function updateTooltip(e) {
             if (!p)
                 return;
             const info = (productInfo[p] || {});
+            const unit = info.unit || 1;
             cols.forEach(function (ci) {
                 const d = currentDates[ci];
                 if (!d)
@@ -1563,9 +2179,9 @@ function updateTooltip(e) {
                 const q = currentPivot[p] ? (currentPivot[p][d] || 0) : 0;
                 tQty += q;
                 if (info.cost)
-                    tCost += q * info.cost;
+                    tCost += q * info.cost * unit;
                 if (info.price)
-                    tPrice += q * info.price;
+                    tPrice += q * info.price * unit;
             });
         });
         hdr = selectedCols.size > 0 && selectedRows.size > 0 ? '📊 交点集計' : selectedCols.size > 0 ? '📅 期間集計' : '📦 品目集計';
@@ -1596,49 +2212,6 @@ function printTable() {
     const meta = '期間: ' + (dates[0] || '-') + ' 〜 ' + (dates[dates.length - 1] || '-') + ' / 出力日時: ' + new Date().toLocaleString('ja-JP');
     document.getElementById('print-meta').textContent = meta;
     window.print();
-}
-function exportToExcel() {
-    const filtered = getFilteredData();
-    if (filtered.length === 0) {
-        alert('データがありません');
-        return;
-    }
-    const dates = getFilteredDates();
-    const showTag1 = document.getElementById('show-tag1').checked;
-    const showTag2 = document.getElementById('show-tag2').checked;
-    const showTag3 = document.getElementById('show-tag3').checked;
-    const pivot = {};
-    filtered.forEach(function (i) { if (!pivot[i.product]) {
-        pivot[i.product] = { total: 0 };
-        dates.forEach(function (d) { pivot[i.product][d] = 0; });
-    } pivot[i.product][i.date] += i.quantity; pivot[i.product].total += i.quantity; });
-    const wsData = [], hdr = ['品目名'];
-    if (showTag1)
-        hdr.push('#大分類');
-    if (showTag2)
-        hdr.push('#中分類');
-    if (showTag3)
-        hdr.push('#小分類');
-    hdr.push('原価', '売価');
-    dates.forEach(function (d) { hdr.push(d); });
-    hdr.push('合計');
-    wsData.push(hdr);
-    Object.keys(pivot).sort().forEach(function (p) {
-        const info = (productInfo[p] || {}), row = [p];
-        if (showTag1)
-            row.push(getTag(p, 1));
-        if (showTag2)
-            row.push(getTag(p, 2));
-        if (showTag3)
-            row.push(getTag(p, 3));
-        row.push(info.cost || '', info.price || '');
-        dates.forEach(function (d) { row.push(pivot[p][d] || 0); });
-        row.push(pivot[p].total);
-        wsData.push(row);
-    });
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wsData), '発注データ');
-    XLSX.writeFile(wb, '発注データ_' + new Date().toISOString().slice(0, 10) + '.xlsx');
 }
 function exportToCSV() {
     const filtered = getFilteredData();
@@ -1688,9 +2261,10 @@ function exportTagStats() {
         if (!t1 && !t2 && !t3)
             return;
         const info = (productInfo[p] || {});
+        const unit = info.unit || 1;
         const qty = currentPivot[p] ? (currentPivot[p].total || 0) : 0;
-        const cost = (info.cost || 0) * qty;
-        const price = (info.price || 0) * qty;
+        const cost = (info.cost || 0) * qty * unit;
+        const price = (info.price || 0) * qty * unit;
         const profit = price - cost;
         const margin = price > 0 ? ((profit / price) * 100).toFixed(1) + '%' : '0%';
         wsData.push([t1, t2, t3, qty, cost, price, profit, margin]);
@@ -1727,13 +2301,18 @@ function exportTagTemplate() {
 document.onclick = function (e) {
     if (!e.target.closest('.dropdown'))
         document.querySelectorAll('.dropdown-menu').forEach(function (d) { d.classList.remove('show'); });
-    if (!e.target.closest('.table-wrap') && !e.target.closest('.selection-tooltip') && !e.target.closest('.selection-hint'))
+    if (!e.target.closest('.table-scroll') && !e.target.closest('.selection-tooltip') && !e.target.closest('.selection-hint'))
         clearSelection();
 };
 // Keyboard shortcuts
 document.addEventListener('keydown', function (e) {
-    // Esc: Close modals or clear selection
+    // Esc: Close fullscreen, modals, or clear selection
     if (e.key === 'Escape') {
+        const fullscreen = document.querySelector('.table-container.fullscreen');
+        if (fullscreen) {
+            toggleTableFullscreen();
+            return;
+        }
         const modals = document.querySelectorAll('.modal.show');
         if (modals.length > 0) {
             modals.forEach(m => m.classList.remove('show'));
@@ -1763,22 +2342,186 @@ document.addEventListener('keydown', function (e) {
         showHelpModal();
     }
 });
-initDatabase().then(function () { renderSavedList(); }).catch(function (err) { console.error('DB初期化エラー:', err); });
-// Set up event listeners for buttons (more reliable than onclick attributes with ES modules)
-document.getElementById('saved-toggle')?.addEventListener('click', toggleSavedList);
-document.getElementById('cloud-toggle')?.addEventListener('click', toggleCloudQuick);
-document.getElementById('cloud-sync-btn')?.addEventListener('click', FirebaseSync.showCloudSyncModal);
-/**
- * Toggle cloud quick section visibility
- */
-function toggleCloudQuick() {
-    const el = document.getElementById('cloud-quick');
-    const btn = document.getElementById('cloud-toggle');
-    if (el && btn) {
-        el.classList.toggle('show');
-        btn.textContent = el.classList.contains('show') ? '▲' : '▼';
+// ========== ファイル順序設定機能 ==========
+let tempFileOrder = []; // モーダル内での一時的な順序
+function showFileOrderModal() {
+    if (loadedFiles.length === 0) {
+        showToast('ファイルが読み込まれていません');
+        return;
+    }
+    // カスタム順序が未設定なら、現在のloadedFilesの順序を使用
+    if (customFileOrder.length === 0) {
+        customFileOrder = loadedFiles.map(f => f.id);
+    }
+    tempFileOrder = [...customFileOrder];
+    renderFileOrderList();
+    document.getElementById('file-order-modal').classList.add('show');
+}
+function closeFileOrderModal() {
+    document.getElementById('file-order-modal').classList.remove('show');
+}
+function renderFileOrderList() {
+    const list = document.getElementById('file-order-list');
+    list.innerHTML = tempFileOrder.map((fileId, idx) => {
+        const file = loadedFiles.find(f => f.id === fileId);
+        const name = file ? file.name : fileId;
+        return '<div class="file-order-item" draggable="true" data-file-id="' + fileId + '">' +
+            '<span class="order-num">' + (idx + 1) + '</span>' +
+            '<span class="file-name">' + escapeHtml(name) + '</span>' +
+            '<span class="drag-handle">☰</span>' +
+            '</div>';
+    }).join('');
+    // ドラッグ&ドロップイベントを設定
+    setupFileOrderDragDrop();
+}
+function setupFileOrderDragDrop() {
+    const items = document.querySelectorAll('.file-order-item');
+    let draggedItem = null;
+    items.forEach(item => {
+        item.addEventListener('dragstart', function(e) {
+            draggedItem = this;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+        item.addEventListener('dragend', function() {
+            this.classList.remove('dragging');
+            document.querySelectorAll('.file-order-item').forEach(i => i.classList.remove('drag-over'));
+            draggedItem = null;
+        });
+        item.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (this !== draggedItem) {
+                this.classList.add('drag-over');
+            }
+        });
+        item.addEventListener('dragleave', function() {
+            this.classList.remove('drag-over');
+        });
+        item.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.classList.remove('drag-over');
+            if (draggedItem && this !== draggedItem) {
+                const fromId = Number(draggedItem.dataset.fileId);
+                const toId = Number(this.dataset.fileId);
+                const fromIdx = tempFileOrder.indexOf(fromId);
+                const toIdx = tempFileOrder.indexOf(toId);
+                if (fromIdx === -1 || toIdx === -1) return;
+                // 順序を入れ替え
+                tempFileOrder.splice(fromIdx, 1);
+                tempFileOrder.splice(toIdx, 0, fromId);
+                renderFileOrderList();
+            }
+        });
+    });
+}
+function applyFileOrder() {
+    customFileOrder = [...tempFileOrder];
+    // allProductsの順序を更新（ファイル順に並び替え）
+    rebuildProductOrderByFiles();
+    closeFileOrderModal();
+    updateTable();
+    showToast('ファイル順序を適用しました');
+}
+function rebuildProductOrderByFiles() {
+    // customFileOrderに基づいてallProductsを再構築
+    const orderedProducts = [];
+    const seen = new Set();
+    // ファイルIDからファイル名を取得するマップ
+    const fileIdToName = {};
+    loadedFiles.forEach(f => { fileIdToName[f.id] = f.name; });
+    customFileOrder.forEach(fileId => {
+        const fileName = fileIdToName[fileId];
+        if (!fileName) return;
+        rawData.data.forEach(item => {
+            if (item.fileName === fileName && !seen.has(item.product)) {
+                orderedProducts.push(item.product);
+                seen.add(item.product);
+            }
+        });
+    });
+    // カスタム順序にないファイルの商品も追加
+    rawData.data.forEach(item => {
+        if (!seen.has(item.product)) {
+            orderedProducts.push(item.product);
+            seen.add(item.product);
+        }
+    });
+    allProducts = orderedProducts;
+}
+// ========== オフラインダウンロード機能 ==========
+async function downloadOfflineApp() {
+    showToast('オフライン版を生成中...');
+    try {
+        // 現在のHTMLを取得
+        const htmlRes = await fetch(window.location.href);
+        let html = await htmlRes.text();
+        // CSSを取得してインライン化
+        const cssRes = await fetch('css/style.css');
+        const css = await cssRes.text();
+        // XLSXライブラリを取得
+        const xlsxRes = await fetch('https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js');
+        const xlsxJs = await xlsxRes.text();
+        // app.jsを取得
+        const appRes = await fetch('js/app.js');
+        const appJs = await appRes.text();
+        // 現在のデータを埋め込み用にエクスポート
+        const embeddedData = {
+            rawData: rawData,
+            loadedFiles: loadedFiles,
+            cellEdits: cellEdits,
+            productInfo: productInfo,
+            productTags: productTags
+        };
+        const dataScript = '<script>\n// 埋め込みデータ（オフライン版用）\nwindow.__EMBEDDED_DATA__ = ' + JSON.stringify(embeddedData) + ';\n<\/script>';
+        // スクリプト内の</script>タグをエスケープ（ブラウザが誤って終了タグと解釈しないように）
+        const escapeScript = function(js) { return js.replace(/<\/script>/gi, '<\\/script>'); };
+        // HTMLを変換：外部リンクをインラインに置換
+        // 注: replace()の第2引数に文字列を使うと$が特殊文字として解釈されるため関数を使用
+        html = html.replace(/<link rel="stylesheet" href="css\/style.css">/, function() { return '<style>' + css + '</style>'; });
+        html = html.replace(/<script src="https:\/\/cdn\.sheetjs\.com[^"]+"><\/script>/, function() { return '<script>' + escapeScript(xlsxJs) + '<\/script>'; });
+        html = html.replace(/<script type="module" src="js\/app\.js[^"]*"><\/script>/, function() { return dataScript + '\n<script>' + escapeScript(appJs) + '<\/script>'; });
+        // ダウンロード
+        const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '発注台帳ビューアー_offline.html';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('オフライン版をダウンロードしました（データ含む）');
+    }
+    catch (err) {
+        console.error('オフラインダウンロードエラー:', err);
+        showToast('ダウンロードに失敗しました');
     }
 }
+// 埋め込みデータの読み込み（オフライン版用）
+function loadEmbeddedData() {
+    if (window.__EMBEDDED_DATA__) {
+        const data = window.__EMBEDDED_DATA__;
+        rawData = data.rawData || [];
+        loadedFiles = data.loadedFiles || [];
+        Object.assign(cellEdits, data.cellEdits || {});
+        Object.assign(productInfo, data.productInfo || {});
+        Object.assign(productTags, data.productTags || {});
+        if (rawData.length > 0) {
+            document.getElementById('drop-zone').style.display = 'none';
+            document.getElementById('main-content').style.display = 'block';
+            updateFileChips();
+            initUI();
+            showToast('埋め込みデータを読み込みました');
+        }
+    }
+}
+initDatabase().then(function () {
+    renderSavedList();
+    loadEmbeddedData();
+}).catch(function (err) { console.error('DB初期化エラー:', err); });
+// Set up event listeners for buttons (more reliable than onclick attributes with ES modules)
+document.getElementById('saved-toggle')?.addEventListener('click', toggleSavedList);
 // Export functions to global scope for HTML onclick handlers
 window.toggleFilesBar = toggleFilesBar;
 window.toggleSavedList = toggleSavedList;
@@ -1799,7 +2542,9 @@ window.deleteProduct = deleteProduct;
 window.editCell = editCell;
 window.toggleFullscreen = toggleFullscreen;
 window.updateTable = updateTable;
+window.toggleSort = toggleSort;
 window.toggleDropdown = toggleDropdown;
+window.closeDropdown = closeDropdown;
 window.toggleStore = toggleStore;
 window.toggleSupplier = toggleSupplier;
 window.selectAllStores = selectAllStores;
@@ -1813,64 +2558,16 @@ window.clearAllFileFilters = clearAllFileFilters;
 window.setTag = setTag;
 window.importTags = importTags;
 window.printTable = printTable;
-window.exportToExcel = exportToExcel;
 window.exportToCSV = exportToCSV;
 window.exportTagStats = exportTagStats;
 window.exportTagTemplate = exportTagTemplate;
 window.clearSelection = clearSelection;
 window.toggleTagStats = toggleTagStats;
-// Firebase cloud sync functions
-window.showCloudSyncModal = FirebaseSync.showCloudSyncModal;
-window.closeCloudSyncModal = FirebaseSync.closeCloudSyncModal;
-window.initFirebase = FirebaseSync.initFirebase;
-window.autoInitFirebase = FirebaseSync.autoInitFirebase;
-window.createRoom = FirebaseSync.createRoom;
-window.joinRoom = FirebaseSync.joinRoom;
-window.uploadToCloud = FirebaseSync.uploadToCloud;
-window.downloadFromCloud = FirebaseSync.downloadFromCloud;
-window.enableAutoSync = FirebaseSync.enableAutoSync;
-window.leaveRoom = FirebaseSync.leaveRoom;
-window.selectAllUploadFiles = FirebaseSync.selectAllUploadFiles;
-window.clearAllUploadFiles = FirebaseSync.clearAllUploadFiles;
-window.uploadSelectedFiles = FirebaseSync.uploadSelectedFiles;
-// Export data for Firebase sync
-window.loadedFiles = loadedFiles;
-window.rawData = rawData;
-window.productInfo = productInfo;
-window.productTags = productTags;
-window.cellEdits = cellEdits;
-window.mergeAllData = mergeAllData;
-// Setter functions to update internal variables from firebase.js
-window.setLoadedFiles = function(files) {
-    loadedFiles.length = 0;
-    loadedFiles.push(...files);
-    window.loadedFiles = loadedFiles;
-};
-window.setRawData = function(data) {
-    Object.keys(rawData).forEach(key => {
-        if (Array.isArray(rawData[key])) {
-            rawData[key].length = 0;
-            if (data[key]) rawData[key].push(...data[key]);
-        }
-    });
-    window.rawData = rawData;
-};
-window.setProductInfo = function(info) {
-    Object.keys(productInfo).forEach(key => delete productInfo[key]);
-    Object.assign(productInfo, info);
-    window.productInfo = productInfo;
-};
-window.setProductTags = function(tags) {
-    Object.keys(productTags).forEach(key => delete productTags[key]);
-    Object.assign(productTags, tags);
-    window.productTags = productTags;
-};
-window.setCellEdits = function(edits) {
-    Object.keys(cellEdits).forEach(key => delete cellEdits[key]);
-    Object.assign(cellEdits, edits);
-    window.cellEdits = cellEdits;
-};
 window.updateFileChips = updateFileChips;
 window.initUI = initUI;
 window.showToast = showToast;
+window.showFileOrderModal = showFileOrderModal;
+window.closeFileOrderModal = closeFileOrderModal;
+window.applyFileOrder = applyFileOrder;
+window.downloadOfflineApp = downloadOfflineApp;
 //# sourceMappingURL=app.js.map
