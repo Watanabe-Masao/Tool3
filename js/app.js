@@ -585,6 +585,7 @@ async function saveToDatabase(overwrite = false) {
         showTag2: document.getElementById('show-tag2').checked,
         showTag3: document.getElementById('show-tag3').checked,
         sortOrder: document.getElementById('sort-order').value,
+        sortOrder2: document.getElementById('sort-order2').value,
         selectedStores: Array.from(selectedStores),
         selectedSuppliers: Array.from(selectedSuppliers),
         sliderFromIdx: sliderFromIdx,
@@ -648,6 +649,7 @@ async function loadFromDB(id) {
             document.getElementById('show-tag3').checked = ds.showTag3 || false;
             // 並び順
             if (ds.sortOrder) document.getElementById('sort-order').value = ds.sortOrder;
+            if (ds.sortOrder2 !== undefined) document.getElementById('sort-order2').value = ds.sortOrder2;
             // 選択ファイル
             selectedFiles = ds.selectedFiles ? new Set(ds.selectedFiles) : new Set(loadedFiles.map(f => f.id));
             // 店舗・業者の選択
@@ -1328,52 +1330,50 @@ function updateTable() {
     currentPivot = pivot;
     var products = Object.keys(pivot);
     const sortOrder = document.getElementById('sort-order').value;
-    if (sortOrder === 'tag') {
-        products.sort(function (a, b) {
-            const t1a = getTag(a, 1) || '\uffff', t1b = getTag(b, 1) || '\uffff';
-            if (t1a !== t1b)
-                return t1a.localeCompare(t1b, 'ja');
-            const t2a = getTag(a, 2) || '\uffff', t2b = getTag(b, 2) || '\uffff';
-            if (t2a !== t2b)
-                return t2a.localeCompare(t2b, 'ja');
-            const t3a = getTag(a, 3) || '\uffff', t3b = getTag(b, 3) || '\uffff';
-            if (t3a !== t3b)
-                return t3a.localeCompare(t3b, 'ja');
-            return a.localeCompare(b, 'ja');
-        });
+    const sortOrder2 = document.getElementById('sort-order2').value;
+    // 比較関数を生成するヘルパー
+    function getCompareFunc(key) {
+        switch (key) {
+            case 'tag':
+                return function (a, b) {
+                    const t1a = getTag(a, 1) || '\uffff', t1b = getTag(b, 1) || '\uffff';
+                    if (t1a !== t1b) return t1a.localeCompare(t1b, 'ja');
+                    const t2a = getTag(a, 2) || '\uffff', t2b = getTag(b, 2) || '\uffff';
+                    if (t2a !== t2b) return t2a.localeCompare(t2b, 'ja');
+                    const t3a = getTag(a, 3) || '\uffff', t3b = getTag(b, 3) || '\uffff';
+                    return t3a.localeCompare(t3b, 'ja');
+                };
+            case 'qty-desc':
+                return function (a, b) { return (pivot[b].total || 0) - (pivot[a].total || 0); };
+            case 'qty-asc':
+                return function (a, b) { return (pivot[a].total || 0) - (pivot[b].total || 0); };
+            case 'cost-desc':
+                return function (a, b) { return ((productInfo[b] || {}).cost || 0) - ((productInfo[a] || {}).cost || 0); };
+            case 'cost-asc':
+                return function (a, b) { return ((productInfo[a] || {}).cost || 0) - ((productInfo[b] || {}).cost || 0); };
+            case 'price-desc':
+                return function (a, b) { return ((productInfo[b] || {}).price || 0) - ((productInfo[a] || {}).price || 0); };
+            case 'price-asc':
+                return function (a, b) { return ((productInfo[a] || {}).price || 0) - ((productInfo[b] || {}).price || 0); };
+            case 'name-desc':
+                return function (a, b) { return b.localeCompare(a, 'ja'); };
+            case 'file':
+                return function (a, b) {
+                    const idxA = allProducts.indexOf(a);
+                    const idxB = allProducts.indexOf(b);
+                    return (idxA === -1 ? 9999 : idxA) - (idxB === -1 ? 9999 : idxB);
+                };
+            default: // 'name' or default
+                return function (a, b) { return a.localeCompare(b, 'ja'); };
+        }
     }
-    else if (sortOrder === 'qty-desc') {
-        products.sort(function (a, b) { return (pivot[b].total || 0) - (pivot[a].total || 0); });
-    }
-    else if (sortOrder === 'qty-asc') {
-        products.sort(function (a, b) { return (pivot[a].total || 0) - (pivot[b].total || 0); });
-    }
-    else if (sortOrder === 'cost-desc') {
-        products.sort(function (a, b) { return ((productInfo[b] || {}).cost || 0) - ((productInfo[a] || {}).cost || 0); });
-    }
-    else if (sortOrder === 'cost-asc') {
-        products.sort(function (a, b) { return ((productInfo[a] || {}).cost || 0) - ((productInfo[b] || {}).cost || 0); });
-    }
-    else if (sortOrder === 'price-desc') {
-        products.sort(function (a, b) { return ((productInfo[b] || {}).price || 0) - ((productInfo[a] || {}).price || 0); });
-    }
-    else if (sortOrder === 'price-asc') {
-        products.sort(function (a, b) { return ((productInfo[a] || {}).price || 0) - ((productInfo[b] || {}).price || 0); });
-    }
-    else if (sortOrder === 'name-desc') {
-        products.sort(function (a, b) { return b.localeCompare(a, 'ja'); });
-    }
-    else if (sortOrder === 'file') {
-        // ファイル順：allProductsの順序を維持
-        products.sort(function (a, b) {
-            const idxA = allProducts.indexOf(a);
-            const idxB = allProducts.indexOf(b);
-            return (idxA === -1 ? 9999 : idxA) - (idxB === -1 ? 9999 : idxB);
-        });
-    }
-    else {
-        products.sort(function (a, b) { return a.localeCompare(b, 'ja'); });
-    }
+    const compare1 = getCompareFunc(sortOrder);
+    const compare2 = sortOrder2 ? getCompareFunc(sortOrder2) : null;
+    products.sort(function (a, b) {
+        const result1 = compare1(a, b);
+        if (result1 !== 0 || !compare2) return result1;
+        return compare2(a, b);
+    });
     if (!showZero)
         products = products.filter(function (p) { return pivot[p].total > 0; });
     currentProducts = products;

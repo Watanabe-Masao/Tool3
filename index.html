@@ -162,18 +162,32 @@
         <label class="checkbox-label">
           <input type="checkbox" id="show-tag3" onchange="updateTable()"> #小分類
         </label>
-        <label>並び順:</label>
+        <label>並び順1:</label>
         <select id="sort-order" onchange="updateTable()">
           <option value="file">ファイル順</option>
-          <option value="name">品目名順 ▲</option>
-          <option value="name-desc">品目名順 ▼</option>
+          <option value="name">品目名 ▲</option>
+          <option value="name-desc">品目名 ▼</option>
           <option value="tag">タグ順</option>
-          <option value="qty-desc">数量多い順</option>
-          <option value="qty-asc">数量少ない順</option>
-          <option value="cost-desc">原価高い順</option>
-          <option value="cost-asc">原価安い順</option>
-          <option value="price-desc">売価高い順</option>
-          <option value="price-asc">売価安い順</option>
+          <option value="qty-desc">数量 ▼</option>
+          <option value="qty-asc">数量 ▲</option>
+          <option value="cost-desc">原価 ▼</option>
+          <option value="cost-asc">原価 ▲</option>
+          <option value="price-desc">売価 ▼</option>
+          <option value="price-asc">売価 ▲</option>
+        </select>
+        <label>2:</label>
+        <select id="sort-order2" onchange="updateTable()">
+          <option value="">なし</option>
+          <option value="file">ファイル順</option>
+          <option value="name">品目名 ▲</option>
+          <option value="name-desc">品目名 ▼</option>
+          <option value="tag">タグ順</option>
+          <option value="qty-desc">数量 ▼</option>
+          <option value="qty-asc">数量 ▲</option>
+          <option value="cost-desc">原価 ▼</option>
+          <option value="cost-asc">原価 ▲</option>
+          <option value="price-desc">売価 ▼</option>
+          <option value="price-asc">売価 ▲</option>
         </select>
       </div>
     </div>
