@@ -376,10 +376,12 @@ function renderTagStatsModalTables() {
             const profit = calcProfit(d);
             const profitClass = profit >= 0 ? 'positive' : 'negative';
             const crossRatio = calcCrossRatio(d, tag3BaseTotal.qty);
-            html3 += '<tr>';
+            const isExpanded = expandedTag3Key === key;
+            const keyEsc = key.replace(/'/g, "\\'");
+            html3 += '<tr class="tag3-row' + (isExpanded ? ' expanded' : '') + '" onclick="toggleTag3Products(\'' + keyEsc + '\')" style="cursor:pointer;">';
             html3 += '<td class="col-parent">' + escapeHtml(d.tag1) + '</td>';
             html3 += '<td class="col-parent">' + escapeHtml(d.tag2) + '</td>';
-            html3 += '<td class="col-name">' + escapeHtml(d.tag3) + '</td>';
+            html3 += '<td class="col-name">' + (isExpanded ? '▼ ' : '▶ ') + escapeHtml(d.tag3) + '</td>';
             html3 += '<td class="col-num">' + d.qty.toLocaleString() + '</td>';
             html3 += '<td class="col-num">¥' + d.cost.toLocaleString() + '</td>';
             html3 += '<td class="col-num">¥' + d.price.toLocaleString() + '</td>';
@@ -388,6 +390,28 @@ function renderTagStatsModalTables() {
             html3 += '<td class="col-bar">' + renderBarCell(d.qty, tag3BaseTotal.qty) + '</td>';
             html3 += '<td class="col-num">' + renderCrossRatioCell(crossRatio) + '</td>';
             html3 += '</tr>';
+
+            // 展開時に品名詳細を表示
+            if (isExpanded) {
+                const products = getProductsForTag3(d.tag1, d.tag2, d.tag3);
+                html3 += '<tr class="tag3-products-row"><td colspan="10">';
+                html3 += '<div class="tag3-products-container">';
+                html3 += '<table class="tag3-products-table">';
+                html3 += '<thead><tr><th>品名</th><th>数量</th><th>原価</th><th>売価</th><th>原価計</th><th>売価計</th></tr></thead>';
+                html3 += '<tbody>';
+                products.forEach(function (prod) {
+                    html3 += '<tr>';
+                    html3 += '<td class="prod-name">' + escapeHtml(prod.name) + '</td>';
+                    html3 += '<td class="prod-num">' + prod.qty.toLocaleString() + '</td>';
+                    html3 += '<td class="prod-num">¥' + prod.cost.toLocaleString() + '</td>';
+                    html3 += '<td class="prod-num">¥' + prod.price.toLocaleString() + '</td>';
+                    html3 += '<td class="prod-num">¥' + prod.totalCost.toLocaleString() + '</td>';
+                    html3 += '<td class="prod-num">¥' + prod.totalPrice.toLocaleString() + '</td>';
+                    html3 += '</tr>';
+                });
+                html3 += '</tbody></table>';
+                html3 += '</div></td></tr>';
+            }
         });
     }
     document.getElementById('modal-tag3-tbody').innerHTML = html3;
@@ -422,6 +446,46 @@ function filterTagModal2(key) {
     renderTagStatsModalTables();
 }
 window.filterTagModal2 = filterTagModal2;
+
+// 小分類の品名詳細を表示/非表示
+let expandedTag3Key = null;
+function toggleTag3Products(key) {
+    if (expandedTag3Key === key) {
+        expandedTag3Key = null; // 同じものをクリックで閉じる
+    } else {
+        expandedTag3Key = key;
+    }
+    renderTagStatsModalTables();
+}
+window.toggleTag3Products = toggleTag3Products;
+
+// 指定した小分類に属する品名リストを取得
+function getProductsForTag3(tag1, tag2, tag3) {
+    const products = [];
+    currentProducts.forEach(function (p) {
+        const t1 = getTag(p, 1) || '(未設定)';
+        const t2 = getTag(p, 2) || '(未設定)';
+        const t3 = getTag(p, 3) || '(未設定)';
+        if (t1 === tag1 && t2 === tag2 && t3 === tag3) {
+            const info = (productInfo[p] || {});
+            const qty = currentPivot[p] ? (currentPivot[p].total || 0) : 0;
+            const unit = info.unit || 1;
+            products.push({
+                name: p,
+                qty: qty,
+                cost: info.cost || 0,
+                price: info.price || 0,
+                unit: unit,
+                totalCost: (info.cost || 0) * qty * unit,
+                totalPrice: (info.price || 0) * qty * unit
+            });
+        }
+    });
+    // 数量の多い順にソート
+    products.sort((a, b) => b.qty - a.qty);
+    return products;
+}
+
 function showSaveModal() {
     if (loadedFiles.length === 0) {
         showToast('データがありません');
