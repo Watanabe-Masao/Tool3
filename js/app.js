@@ -4,8 +4,6 @@ const DB_VERSION = 3;
 const STORE_NAME = 'savedData';
 // Database connection
 let db = null;
-// Long-press duration for cell range selection (ms)
-const LONG_PRESS_DURATION = 300;
 /**
  * Initialize IndexedDB database
  */
@@ -647,8 +645,6 @@ let selectedCells = new Set();
 let isDraggingCells = false;
 /** Cell drag start position {row, col} */
 let cellDragStart = null;
-/** Cell drag timer ID */
-let cellDragTimer = null;
 /** Calendar current year and month for add product modal */
 let calendarYear = new Date().getFullYear();
 let calendarMonth = new Date().getMonth(); // 0-11
@@ -1390,14 +1386,13 @@ function setupSelection() {
                 return; // 編集中は無視
             if (e.button !== 0)
                 return; // 左クリックのみ
-            cellDragTimer = window.setTimeout(function () {
-                isDraggingCells = true;
-                selectedCells.clear();
-                cellDragStart = { row: parseInt(td.dataset.row), col: parseInt(td.dataset.col) };
-                const cellKey = td.dataset.row + '-' + td.dataset.col;
-                selectedCells.add(cellKey);
-                applyCellSelection();
-            }, LONG_PRESS_DURATION);
+            // 即座にドラッグ選択を開始（長押し不要）
+            isDraggingCells = true;
+            selectedCells.clear();
+            cellDragStart = { row: parseInt(td.dataset.row), col: parseInt(td.dataset.col) };
+            const cellKey = td.dataset.row + '-' + td.dataset.col;
+            selectedCells.add(cellKey);
+            applyCellSelection();
         };
         td.onmouseenter = function (e) {
             if (isDraggingCells && cellDragStart) {
@@ -1414,12 +1409,6 @@ function setupSelection() {
                     }
                 }
                 applyCellSelection();
-            }
-        };
-        td.onmouseup = function (e) {
-            if (cellDragTimer) {
-                clearTimeout(cellDragTimer);
-                cellDragTimer = null;
             }
         };
     });
@@ -1464,10 +1453,7 @@ document.addEventListener('mouseup', function () {
         document.body.style.cursor = '';
     }
 });
-document.getElementById('table-scroll').onmouseup = function () { isDraggingCol = isDraggingRow = isDraggingCells = false; if (cellDragTimer) {
-    clearTimeout(cellDragTimer);
-    cellDragTimer = null;
-} };
+document.getElementById('table-scroll').onmouseup = function () { isDraggingCol = isDraggingRow = isDraggingCells = false; };
 document.onmousemove = function (e) { if ((hasSelection() || selectedCells.size > 0) && !e.target.closest('.date-slider-track'))
     updateTooltip(e); };
 function toggleCol(c) { selectedCols.has(c) ? selectedCols.delete(c) : selectedCols.add(c); }
@@ -1594,49 +1580,6 @@ function printTable() {
     const meta = '期間: ' + (dates[0] || '-') + ' 〜 ' + (dates[dates.length - 1] || '-') + ' / 出力日時: ' + new Date().toLocaleString('ja-JP');
     document.getElementById('print-meta').textContent = meta;
     window.print();
-}
-function exportToExcel() {
-    const filtered = getFilteredData();
-    if (filtered.length === 0) {
-        alert('データがありません');
-        return;
-    }
-    const dates = getFilteredDates();
-    const showTag1 = document.getElementById('show-tag1').checked;
-    const showTag2 = document.getElementById('show-tag2').checked;
-    const showTag3 = document.getElementById('show-tag3').checked;
-    const pivot = {};
-    filtered.forEach(function (i) { if (!pivot[i.product]) {
-        pivot[i.product] = { total: 0 };
-        dates.forEach(function (d) { pivot[i.product][d] = 0; });
-    } pivot[i.product][i.date] += i.quantity; pivot[i.product].total += i.quantity; });
-    const wsData = [], hdr = ['品目名'];
-    if (showTag1)
-        hdr.push('#大分類');
-    if (showTag2)
-        hdr.push('#中分類');
-    if (showTag3)
-        hdr.push('#小分類');
-    hdr.push('原価', '売価');
-    dates.forEach(function (d) { hdr.push(d); });
-    hdr.push('合計');
-    wsData.push(hdr);
-    Object.keys(pivot).sort().forEach(function (p) {
-        const info = (productInfo[p] || {}), row = [p];
-        if (showTag1)
-            row.push(getTag(p, 1));
-        if (showTag2)
-            row.push(getTag(p, 2));
-        if (showTag3)
-            row.push(getTag(p, 3));
-        row.push(info.cost || '', info.price || '');
-        dates.forEach(function (d) { row.push(pivot[p][d] || 0); });
-        row.push(pivot[p].total);
-        wsData.push(row);
-    });
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wsData), '発注データ');
-    XLSX.writeFile(wb, '発注データ_' + new Date().toISOString().slice(0, 10) + '.xlsx');
 }
 function exportToCSV() {
     const filtered = getFilteredData();
@@ -1798,7 +1741,6 @@ window.clearAllFileFilters = clearAllFileFilters;
 window.setTag = setTag;
 window.importTags = importTags;
 window.printTable = printTable;
-window.exportToExcel = exportToExcel;
 window.exportToCSV = exportToCSV;
 window.exportTagStats = exportTagStats;
 window.exportTagTemplate = exportTagTemplate;
