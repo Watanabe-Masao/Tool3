@@ -1462,9 +1462,22 @@ function parseHaibunFormat(wb, fileName) {
                 }
             }
 
+            // 規格を探す（品名の次の列）
+            let spec = '';
+            if (prodCol >= 0 && prodCol + 1 < storeStartCol) {
+                const specCell = String(row[prodCol + 1] || '').trim();
+                // 規格として適切か判定（数字・単位表記ではなく、日本語またはアルファベットを含む）
+                if (specCell &&
+                    !/^\d+$/.test(specCell) &&
+                    !/^\d+\s*(入|束|玉|袋|個|本|kg|g|円)/.test(specCell) &&
+                    specCell.length <= 20) {
+                    spec = specCell;
+                }
+            }
+
             // デバッグ: 行の状態を出力
             if (rowHasQty || foundProd) {
-                console.log('行' + r + ':', { 日付: curDate, 品名: foundProd, 品名列: prodCol, 数量あり: rowHasQty, 合計: totalQty });
+                console.log('行' + r + ':', { 日付: curDate, 品名: foundProd, 規格: spec, 品名列: prodCol, 数量あり: rowHasQty, 合計: totalQty });
             }
 
             if (!rowHasQty) continue;
@@ -1473,8 +1486,12 @@ function parseHaibunFormat(wb, fileName) {
                 continue;
             }
 
-            const prodName = extractProductName(foundProd);
-            prods.add(prodName);
+            // 品名を正規化
+            let baseProdName = extractProductName(foundProd);
+            // 規格があれば品名に付加
+            if (spec) {
+                baseProdName = baseProdName + '（' + spec + '）';
+            }
 
             // 原価・売価・入数を品名位置を基準に相対的に取得
             let cost = null, unit = null;
@@ -1532,7 +1549,7 @@ function parseHaibunFormat(wb, fileName) {
                 }
             }
 
-            console.log('商品情報:', foundProd, { 原価: cost, 売価: price, 入数: unit });
+            console.log('商品情報:', foundProd, { 規格: spec, 原価: cost, 売価: price, 入数: unit });
 
             // 税抜価格が取得できなかった場合のフォールバック
             if (price === null && cost !== null) {
@@ -1540,9 +1557,24 @@ function parseHaibunFormat(wb, fileName) {
                 price = Math.round(cost * 1.3);
             }
 
-            if (!pInfo[prodName]) {
-                pInfo[prodName] = { cost, price, unit };
+            // 品名+規格+原価+売価でユニークなキーを生成
+            // 同じ品名+規格でも原価・売価が異なれば別行として扱う
+            let prodKey = baseProdName;
+            const existingInfo = pInfo[baseProdName];
+            if (existingInfo) {
+                // 既存の商品と原価・売価を比較
+                if ((cost !== null && existingInfo.cost !== cost) ||
+                    (price !== null && existingInfo.price !== price)) {
+                    // 原価または売価が異なる場合、価格を付加してユニークキーにする
+                    prodKey = baseProdName + '_' + (cost || 0) + '_' + (price || 0);
+                    console.log('価格差分による別商品化:', prodKey);
+                }
             }
+
+            if (!pInfo[prodKey]) {
+                pInfo[prodKey] = { cost, price, unit };
+            }
+            prods.add(prodKey);
 
             // 店舗別数量を登録
             if (curDate) {
@@ -1553,7 +1585,7 @@ function parseHaibunFormat(wb, fileName) {
                         data.push({
                             fileName,
                             supplier: sn,
-                            product: prodName,
+                            product: prodKey,
                             date: curDate,
                             store: sc.code,
                             quantity: q
@@ -1562,10 +1594,10 @@ function parseHaibunFormat(wb, fileName) {
                     }
                 });
                 if (addedCount > 0) {
-                    console.log('データ追加:', prodName, curDate, addedCount + '件');
+                    console.log('データ追加:', prodKey, curDate, addedCount + '件');
                 }
             } else {
-                console.log('日付なしのためスキップ:', prodName, '行:', r);
+                console.log('日付なしのためスキップ:', prodKey, '行:', r);
             }
         }
     });
