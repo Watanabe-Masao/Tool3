@@ -1289,6 +1289,8 @@ function updateTable() {
             var cellClass = 'value';
             if (v > 0)
                 cellClass += ' has-value';
+            else if (showZero)
+                cellClass += ' no-delivery';
             if (isEdited)
                 cellClass += ' edited';
             if (canEdit)

@@ -1022,6 +1022,11 @@ body {
   color: #2e7d32;
 }
 
+.data-table td.value.no-delivery {
+  background: #fff3e0;
+  color: #e65100;
+}
+
 .data-table td.value.edited {
   background: #ffebee;
   font-weight: 700;
