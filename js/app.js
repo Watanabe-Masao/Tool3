@@ -148,13 +148,17 @@ function toggleFilesBar() { const b = document.getElementById('files-bar-body'),
 // テーブル全画面表示
 function toggleTableFullscreen() {
     const container = document.getElementById('table-container');
+    if (!container) {
+        console.error('table-container not found');
+        return;
+    }
     const btn = container.querySelector('.btn-fullscreen');
     container.classList.toggle('fullscreen');
     if (container.classList.contains('fullscreen')) {
-        btn.textContent = '✕ 閉じる';
+        if (btn) btn.textContent = '✕ 閉じる';
         document.body.style.overflow = 'hidden';
     } else {
-        btn.textContent = '⛶ 全画面';
+        if (btn) btn.textContent = '⛶ 全画面';
         document.body.style.overflow = '';
     }
 }
@@ -162,8 +166,13 @@ window.toggleTableFullscreen = toggleTableFullscreen;
 
 // タグ統計詳細モーダル
 function showTagStatsModal() {
-    updateTagStatsModal();
-    document.getElementById('tag-stats-modal').classList.add('show');
+    try {
+        updateTagStatsModal();
+        document.getElementById('tag-stats-modal').classList.add('show');
+    } catch (e) {
+        console.error('showTagStatsModal error:', e);
+        showToast('データがありません');
+    }
 }
 window.showTagStatsModal = showTagStatsModal;
 
@@ -178,6 +187,18 @@ function updateTagStatsModal() {
     const tag2Data = {};
     const tag3Data = {};
     let grandTotal = { qty: 0, cost: 0, price: 0 };
+
+    if (!currentProducts || currentProducts.length === 0) {
+        document.getElementById('modal-total-qty').textContent = '0';
+        document.getElementById('modal-total-cost').textContent = '¥0';
+        document.getElementById('modal-total-price').textContent = '¥0';
+        document.getElementById('modal-total-profit').textContent = '¥0';
+        document.getElementById('modal-total-margin').textContent = '0%';
+        document.getElementById('modal-tag1-tbody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;">データがありません</td></tr>';
+        document.getElementById('modal-tag2-tbody').innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;">データがありません</td></tr>';
+        document.getElementById('modal-tag3-tbody').innerHTML = '<tr><td colspan="9" style="text-align:center;color:#999;">データがありません</td></tr>';
+        return;
+    }
 
     currentProducts.forEach(function (p) {
         const t1 = getTag(p, 1) || '(未設定)';
