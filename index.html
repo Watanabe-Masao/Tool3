@@ -56,7 +56,7 @@
         <button class="btn btn-primary" onclick="showSaveModal()">💾 保存</button>
         <button class="btn" onclick="printTable()">🖨️ 印刷</button>
         <button class="btn" onclick="exportToCSV()">📄 CSV</button>
-        <button class="btn" onclick="showQrModal()">📱 QR</button>
+        <button class="btn" onclick="showTransferModal()">📤 転送</button>
         <button class="btn" onclick="downloadOfflineApp()">⬇️ DL</button>
         <button class="btn" onclick="toggleFullscreen()">⛶ 全画面</button>
         <button class="btn btn-help" onclick="showHelpModal()" title="ヘルプ・ショートカット">❓</button>
@@ -420,23 +420,26 @@
     </div>
   </div>
 
-  <!-- QRコードモーダル -->
-  <div id="qr-modal" class="modal">
+  <!-- データ転送モーダル -->
+  <div id="transfer-modal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
-        <h2>📱 QRコードでデータ転送</h2>
-        <button class="modal-close" onclick="closeQrModal()" type="button">✕</button>
+        <h2>📤 データ転送</h2>
+        <button class="modal-close" onclick="closeTransferModal()" type="button">✕</button>
       </div>
-      <div class="qr-content">
-        <p class="qr-info">スマホでQRコードを読み取ってデータを転送できます。</p>
-        <p class="qr-warning">※ データが大きい場合は複数のQRコードに分割されます。</p>
-        <div class="qr-nav">
-          <button class="btn" id="qr-prev" onclick="showPrevQr()">◀ 前へ</button>
-          <span id="qr-page">1 / 1</span>
-          <button class="btn" id="qr-next" onclick="showNextQr()">次へ ▶</button>
+      <div class="transfer-content">
+        <div class="transfer-section">
+          <h3>📥 エクスポート（書き出し）</h3>
+          <p>現在のデータをJSONファイルとして保存します。編集内容も含まれます。</p>
+          <button class="btn btn-primary" onclick="exportToJSON()">💾 JSONファイルを保存</button>
         </div>
-        <div id="qr-code" class="qr-code-container"></div>
-        <p id="qr-status" class="qr-status"></p>
+        <hr>
+        <div class="transfer-section">
+          <h3>📤 インポート（読み込み）</h3>
+          <p>以前エクスポートしたJSONファイルを読み込みます。</p>
+          <input type="file" id="json-import-input" accept=".json" onchange="importFromJSON(this)" style="display:none;">
+          <button class="btn" onclick="document.getElementById('json-import-input').click()">📂 JSONファイルを開く</button>
+        </div>
       </div>
     </div>
   </div>
@@ -455,7 +458,6 @@
 
   <!-- ライブラリ -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 
   <!-- アプリケーションスクリプト -->
   <script type="module" src="js/app.js?v=20251211-10"></script>

@@ -1748,96 +1748,73 @@ document.addEventListener('keydown', function (e) {
         showHelpModal();
     }
 });
-// ========== QRコード機能 ==========
-let qrChunks = [];
-let currentQrIndex = 0;
-function showQrModal() {
-    if (rawData.length === 0) {
+// ========== データ転送機能（JSON） ==========
+function showTransferModal() {
+    document.getElementById('transfer-modal').classList.add('show');
+}
+function closeTransferModal() {
+    document.getElementById('transfer-modal').classList.remove('show');
+}
+function exportToJSON() {
+    if (rawData.data.length === 0) {
         showToast('データがありません');
         return;
     }
-    const modal = document.getElementById('qr-modal');
-    modal.classList.add('show');
-    generateQrCodes();
-}
-function closeQrModal() {
-    document.getElementById('qr-modal').classList.remove('show');
-}
-function generateQrCodes() {
-    // 現在のフィルタリングされたデータをJSON化
-    const filtered = getFilteredData();
     const exportData = {
-        version: 1,
-        date: new Date().toISOString(),
-        data: filtered.slice(0, 100) // 最大100件に制限
+        version: 2,
+        exportDate: new Date().toISOString(),
+        rawData: rawData,
+        loadedFiles: loadedFiles,
+        cellEdits: cellEdits,
+        productInfo: productInfo,
+        productTags: productTags
     };
-    const jsonStr = JSON.stringify(exportData);
-    // QRコードの最大容量（約2KB程度を安全な上限に）
-    const maxChunkSize = 1800;
-    qrChunks = [];
-    for (let i = 0; i < jsonStr.length; i += maxChunkSize) {
-        qrChunks.push(jsonStr.slice(i, i + maxChunkSize));
-    }
-    currentQrIndex = 0;
-    renderQrCode();
+    const jsonStr = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json; charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '発注データ_' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('JSONファイルを保存しました');
+    closeTransferModal();
 }
-function renderQrCode() {
-    const container = document.getElementById('qr-code');
-    container.innerHTML = '';
-    if (qrChunks.length === 0) {
-        container.innerHTML = '<p>データがありません</p>';
-        return;
-    }
-    const chunk = qrChunks[currentQrIndex];
-    const prefix = qrChunks.length > 1 ? `[${currentQrIndex + 1}/${qrChunks.length}]` : '';
-    const qrData = prefix + chunk;
-    // qrcode-generatorライブラリでQRコードを生成
-    if (typeof qrcode !== 'undefined') {
+function importFromJSON(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
         try {
-            // TypeNumber 0 = 自動, ErrorCorrectionLevel L = 7%
-            const qr = qrcode(0, 'L');
-            qr.addData(qrData);
-            qr.make();
-            // SVGとして生成（より鮮明）
-            const size = 256;
-            const cellSize = Math.floor(size / qr.getModuleCount());
-            let svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`;
-            svg += `<rect width="100%" height="100%" fill="white"/>`;
-            for (let row = 0; row < qr.getModuleCount(); row++) {
-                for (let col = 0; col < qr.getModuleCount(); col++) {
-                    if (qr.isDark(row, col)) {
-                        svg += `<rect x="${col * cellSize}" y="${row * cellSize}" width="${cellSize}" height="${cellSize}" fill="black"/>`;
-                    }
-                }
+            const data = JSON.parse(e.target.result);
+            if (!data.version || !data.rawData) {
+                showToast('無効なJSONファイルです');
+                return;
             }
-            svg += '</svg>';
-            container.innerHTML = svg;
+            // データを復元
+            rawData = data.rawData;
+            loadedFiles = data.loadedFiles || [];
+            Object.assign(cellEdits, data.cellEdits || {});
+            Object.assign(productInfo, data.productInfo || {});
+            Object.assign(productTags, data.productTags || {});
+            // 全商品リストを再構築
+            allProducts = [...new Set(rawData.data.map(d => d.product))].sort();
+            // UIを更新
+            document.getElementById('drop-zone').style.display = 'none';
+            document.getElementById('main-content').style.display = 'block';
+            updateFileChips();
+            initUI();
+            showToast('データを読み込みました（' + rawData.data.length + '件）');
+            closeTransferModal();
+        } catch (err) {
+            console.error('JSONインポートエラー:', err);
+            showToast('ファイルの読み込みに失敗しました');
         }
-        catch (err) {
-            container.innerHTML = '<p>QRコード生成エラー: データが大きすぎます</p>';
-            console.error(err);
-        }
-    }
-    else {
-        container.innerHTML = '<p>QRコードライブラリが読み込まれていません</p>';
-    }
-    // ページ表示更新
-    document.getElementById('qr-page').textContent = `${currentQrIndex + 1} / ${qrChunks.length}`;
-    document.getElementById('qr-prev').disabled = currentQrIndex === 0;
-    document.getElementById('qr-next').disabled = currentQrIndex >= qrChunks.length - 1;
-    document.getElementById('qr-status').textContent = `データ: ${qrChunks.length > 1 ? '分割転送が必要です。全てのQRコードを順番に読み取ってください。' : '1回のスキャンで転送可能'}`;
-}
-function showPrevQr() {
-    if (currentQrIndex > 0) {
-        currentQrIndex--;
-        renderQrCode();
-    }
-}
-function showNextQr() {
-    if (currentQrIndex < qrChunks.length - 1) {
-        currentQrIndex++;
-        renderQrCode();
-    }
+    };
+    reader.readAsText(file);
+    input.value = ''; // リセット
 }
 // ========== オフラインダウンロード機能 ==========
 async function downloadOfflineApp() {
@@ -1852,9 +1829,6 @@ async function downloadOfflineApp() {
         // XLSXライブラリを取得
         const xlsxRes = await fetch('https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js');
         const xlsxJs = await xlsxRes.text();
-        // QRCodeライブラリを取得
-        const qrRes = await fetch('https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js');
-        const qrJs = await qrRes.text();
         // app.jsを取得
         const appRes = await fetch('js/app.js');
         const appJs = await appRes.text();
@@ -1874,7 +1848,6 @@ window.__EMBEDDED_DATA__ = ${JSON.stringify(embeddedData)};
         // 注: replace()の第2引数に文字列を使うと$が特殊文字として解釈されるため関数を使用
         html = html.replace(/<link rel="stylesheet" href="css\/style.css">/, function() { return '<style>' + css + '</style>'; });
         html = html.replace(/<script src="https:\/\/cdn\.sheetjs\.com[^"]+"><\/script>/, function() { return '<script>' + xlsxJs + '<\/script>'; });
-        html = html.replace(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/qrcode[^"]+"><\/script>/, function() { return '<script>' + qrJs + '<\/script>'; });
         html = html.replace(/<script type="module" src="js\/app\.js[^"]*"><\/script>/, function() { return dataScript + '\n<script>' + appJs + '<\/script>'; });
         // ダウンロード
         const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
@@ -1960,9 +1933,9 @@ window.toggleTagStats = toggleTagStats;
 window.updateFileChips = updateFileChips;
 window.initUI = initUI;
 window.showToast = showToast;
-window.showQrModal = showQrModal;
-window.closeQrModal = closeQrModal;
-window.showPrevQr = showPrevQr;
-window.showNextQr = showNextQr;
+window.showTransferModal = showTransferModal;
+window.closeTransferModal = closeTransferModal;
+window.exportToJSON = exportToJSON;
+window.importFromJSON = importFromJSON;
 window.downloadOfflineApp = downloadOfflineApp;
 //# sourceMappingURL=app.js.map
