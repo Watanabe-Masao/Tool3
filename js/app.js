@@ -1513,10 +1513,12 @@ function parseHaibunFormat(wb, fileName) {
             const unitCol = prodCol + 5;
             if (unitCol < row.length) {
                 const unitStr = String(row[unitCol] || '');
-                // 全角数字を半角に変換
-                const normalizedStr = unitStr.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
-                // 単位付きパターン（8入、10束など）
-                const unitMatch = normalizedStr.match(/(\d+)\s*(入|束|玉|袋|個|本|ｹｰｽ|ケース)/);
+                // 全角数字・全角英字を半角に変換
+                const normalizedStr = unitStr
+                    .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+                    .replace(/[Ａ-Ｚａ-ｚ]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+                // 単位付きパターン（8入、10束、3K、3Kgなど）
+                const unitMatch = normalizedStr.match(/(\d+)\s*(入|束|玉|袋|個|本|ｹｰｽ|ケース|[Kk][Gg]?|キロ|[Gg])/i);
                 if (unitMatch) {
                     unit = parseInt(unitMatch[1]);
                     console.log('入数検出(相対・単位付):', unit, '元値:', unitStr, '列:', unitCol);
@@ -1534,11 +1536,13 @@ function parseHaibunFormat(wb, fileName) {
             if (cost === null || unit === null) {
                 for (let c = prodCol + 1; c < Math.min(storeStartCol, prodCol + 7); c++) {
                     const cellStr = String(row[c] || '');
-                    const normalizedStr = cellStr.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+                    const normalizedStr = cellStr
+                        .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+                        .replace(/[Ａ-Ｚａ-ｚ]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
 
                     // 入数パターン（単位付きまたは数字のみ）
                     if (unit === null) {
-                        const unitMatch = normalizedStr.match(/(\d+)\s*(入|束|玉|袋|個|本|ｹｰｽ|ケース)/);
+                        const unitMatch = normalizedStr.match(/(\d+)\s*(入|束|玉|袋|個|本|ｹｰｽ|ケース|[Kk][Gg]?|キロ|[Gg])/i);
                         if (unitMatch) {
                             unit = parseInt(unitMatch[1]);
                             console.log('入数検出(フォールバック・単位付):', unit, '列:', c);
