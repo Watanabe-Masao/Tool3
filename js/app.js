@@ -1896,15 +1896,14 @@ async function downloadOfflineApp() {
             productInfo: productInfo,
             productTags: productTags
         };
-        const dataScript = `<script>
-// 埋め込みデータ（オフライン版用）
-window.__EMBEDDED_DATA__ = ${JSON.stringify(embeddedData)};
-</script>`;
+        const dataScript = '<script>\n// 埋め込みデータ（オフライン版用）\nwindow.__EMBEDDED_DATA__ = ' + JSON.stringify(embeddedData) + ';\n<\/script>';
+        // スクリプト内の</script>タグをエスケープ（ブラウザが誤って終了タグと解釈しないように）
+        const escapeScript = function(js) { return js.replace(/<\/script>/gi, '<\\/script>'); };
         // HTMLを変換：外部リンクをインラインに置換
         // 注: replace()の第2引数に文字列を使うと$が特殊文字として解釈されるため関数を使用
         html = html.replace(/<link rel="stylesheet" href="css\/style.css">/, function() { return '<style>' + css + '</style>'; });
-        html = html.replace(/<script src="https:\/\/cdn\.sheetjs\.com[^"]+"><\/script>/, function() { return '<script>' + xlsxJs + '<\/script>'; });
-        html = html.replace(/<script type="module" src="js\/app\.js[^"]*"><\/script>/, function() { return dataScript + '\n<script>' + appJs + '<\/script>'; });
+        html = html.replace(/<script src="https:\/\/cdn\.sheetjs\.com[^"]+"><\/script>/, function() { return '<script>' + escapeScript(xlsxJs) + '<\/script>'; });
+        html = html.replace(/<script type="module" src="js\/app\.js[^"]*"><\/script>/, function() { return dataScript + '\n<script>' + escapeScript(appJs) + '<\/script>'; });
         // ダウンロード
         const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
         const url = URL.createObjectURL(blob);
