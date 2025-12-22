@@ -2125,57 +2125,50 @@ function parseImproFormat(wb, fileName) {
                 }
             }
 
-            // 日付がない行は品名行の可能性をチェック
-            if (!dateStr) {
-                // 品名を探す（漢字/ひらがな/カタカナを含む文字列）
-                for (let c = 0; c < Math.min(6, row.length); c++) {
-                    const cell = String(row[c] || '').trim();
-                    if (!cell || cell.length < 2) continue;
+            if (!dateStr) continue; // 日付がない行はスキップ
 
-                    // 日付パターンではない、かつ日本語を含む文字列
-                    if (/[ぁ-んァ-ン一-龥]/.test(cell) && !/\d+\/\d+/.test(cell)) {
-                        // 品名として適切かチェック
-                        if (cell.indexOf('県産') >= 0 || cell.indexOf('産') >= 0 ||
-                            cell.indexOf('みかん') >= 0 || cell.indexOf('ぶどう') >= 0 ||
-                            cell.indexOf('りんご') >= 0 || cell.indexOf('いちご') >= 0 ||
-                            cell.indexOf('房') >= 0 || cell.indexOf('袋') >= 0 ||
-                            cell.indexOf('王') >= 0 || // 甘熟王など
-                            /[ァ-ン]{2,}/.test(cell) || // カタカナ2文字以上
-                            cell.length >= 4) { // 4文字以上の日本語
-                            curProdName = extractProductName(cell);
-                            console.log('品名検出:', curProdName, '行:', r, '列:', c, '元:', cell);
-                            break;
+            // 最初の列から品名を抽出（品番・JAN・品名が結合されている場合）
+            const firstCol = String(row[0] || '');
+            if (firstCol.length > 10 && /[ぁ-んァ-ン一-龥]/.test(firstCol)) {
+                // 日本語部分を抽出（県産、産地名、品名など）
+                const jpMatch = firstCol.match(/([ぁ-んァ-ン一-龥][ぁ-んァ-ン一-龥\u3000-\u303f\s\d０-９Ａ-Ｚａ-ｚA-Za-z・（）()]+)/);
+                if (jpMatch && jpMatch[1].length >= 4) {
+                    curProdName = extractProductName(jpMatch[1].trim());
+                    console.log('品名検出(結合セル):', curProdName, '行:', r, '元:', firstCol.substring(0, 50));
+                }
+            }
+
+            // 原価・売価を探す
+            // まず「原価　売価」形式のセルを探す（例: "300　　　　　　　398"）
+            for (let c = 1; c < Math.min(storeStartCol, 6); c++) {
+                const cell = String(row[c] || '');
+                // 全角スペースや空白で区切られた2つの数字を探す
+                const priceMatch = cell.match(/(\d+)[　\s]+(\d+)/);
+                if (priceMatch) {
+                    const val1 = parseInt(priceMatch[1]);
+                    const val2 = parseInt(priceMatch[2]);
+                    if (val1 >= 10 && val1 < 50000 && val2 >= 10 && val2 < 50000) {
+                        if (val1 < val2) {
+                            curCost = val1;
+                            curPrice = val2;
+                        } else {
+                            curCost = val2;
+                            curPrice = val1;
                         }
+                        console.log('原価売価検出(結合セル):', curCost, curPrice, '列:', c);
+                        break;
                     }
-                }
-                continue; // 日付がない行はスキップ
-            }
-
-            // 日付がある行（データ行）の処理
-            // 原価・売価を探す（数値が2つ連続する列）
-            for (let c = Math.max(1, dateCol); c < Math.min(storeStartCol - 2, 10); c++) {
-                const val1 = Number(row[c]);
-                const val2 = Number(row[c + 1]);
-                if (!isNaN(val1) && val1 >= 10 && val1 < 50000 &&
-                    !isNaN(val2) && val2 >= 10 && val2 < 50000 &&
-                    val1 !== val2) {
-                    // 小さい方が原価、大きい方が売価
-                    if (val1 < val2) {
-                        curCost = val1;
-                        curPrice = val2;
-                    } else {
-                        curCost = val2;
-                        curPrice = val1;
-                    }
-                    break;
                 }
             }
 
-            // 入数を探す
-            for (let c = 5; c < Math.min(storeStartCol - 1, 12); c++) {
-                const val = Number(row[c]);
-                if (!isNaN(val) && val >= 1 && val <= 100 && Number.isInteger(val)) {
-                    if (curCost && val < curCost && val < (curPrice || 999)) {
+            // 入数を探す（容量単位セルから）
+            for (let c = 3; c < Math.min(storeStartCol, 6); c++) {
+                const cell = String(row[c] || '');
+                // "1" や入数を表す数字を探す
+                const unitMatch = cell.match(/^\s*(\d+)\s*$/);
+                if (unitMatch) {
+                    const val = parseInt(unitMatch[1]);
+                    if (val >= 1 && val <= 100) {
                         curUnit = val;
                         break;
                     }
