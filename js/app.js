@@ -1953,40 +1953,65 @@ function detectAndParseWorkbook(wb, fileName) {
             const row = json[r] || [];
             const rowStr = row.join('');
 
-            // 週間インプロ形式の検出
-            if (rowStr.indexOf('週間インプロ') >= 0 || rowStr.indexOf('インプロ') >= 0) {
+            // 週間インプロ形式の検出（キーワード）
+            if (rowStr.indexOf('週間インプロ') >= 0 || rowStr.indexOf('インプロ') >= 0 ||
+                rowStr.indexOf('週間ダイヤ') >= 0 || rowStr.indexOf('ダイヤグラム') >= 0) {
                 isImpro = true;
                 console.log('週間インプロキーワード検出:', rowStr.substring(0, 50), 'row:', r);
-                break;
             }
 
             // 特売原価/特売売価の検出（インプロ形式の特徴）
             if (rowStr.indexOf('特売原価') >= 0 || rowStr.indexOf('特売売価') >= 0) {
                 isImpro = true;
                 console.log('特売原価/売価キーワード検出:', rowStr.substring(0, 50), 'row:', r);
-                break;
             }
 
-            // 配分表のキーワード検出
-            if (rowStr.indexOf('配分') >= 0 || rowStr.indexOf('商品連絡書') >= 0) {
+            // インプロ形式の構造検出（日付+曜日パターン）
+            if (/\d{1,2}\/\d{1,2}\([月火水木金土日]\)/.test(rowStr)) {
+                // 店舗コードが多数ある行がすでに見つかっていればインプロ
+                let storeCount = 0;
+                for (let c = 5; c < row.length; c++) {
+                    if (/^\d{1,3}$/.test(String(row[c] || '').trim())) storeCount++;
+                }
+                if (storeCount >= 3) {
+                    isImpro = true;
+                    console.log('日付+曜日パターンでインプロ検出:', rowStr.substring(0, 50), 'row:', r);
+                }
+            }
+
+            // 店舗コード行の検出（インプロ形式の特徴）
+            let storeCodes = 0;
+            for (let c = 5; c < row.length; c++) {
+                if (/^0?[1-9]\d?$/.test(String(row[c] || '').trim())) storeCodes++;
+            }
+            if (storeCodes >= 10) {
+                isImpro = true;
+                console.log('店舗コード行でインプロ検出:', storeCodes + '店舗', 'row:', r);
+            }
+
+            // 配分表のキーワード検出（インプロより優先度低）
+            if (!isImpro && (rowStr.indexOf('配分') >= 0 || rowStr.indexOf('商品連絡書') >= 0)) {
                 isHaibun = true;
                 console.log('配分キーワード検出:', rowStr.substring(0, 50), 'row:', r);
-                break;
             }
 
-            // ヘッダー行の特徴を確認（納品日 + 産地/品の組み合わせ）
-            let hasNouhin = false, hasSanchi = false, hasHinmei = false;
-            for (let c = 0; c < Math.min(15, row.length); c++) {
-                const cell = String(row[c] || '').trim();
-                if (cell === '納品日' || cell === '納品') hasNouhin = true;
-                if (cell === '産地') hasSanchi = true;
-                if (cell === '品' || cell === '品名') hasHinmei = true;
+            // ヘッダー行の特徴を確認（納品日 + 産地/品の組み合わせ）- インプロでなければ配分表
+            if (!isImpro) {
+                let hasNouhin = false, hasSanchi = false, hasHinmei = false;
+                for (let c = 0; c < Math.min(15, row.length); c++) {
+                    const cell = String(row[c] || '').trim();
+                    if (cell === '納品日' || cell === '納品') hasNouhin = true;
+                    if (cell === '産地') hasSanchi = true;
+                    if (cell === '品' || cell === '品名') hasHinmei = true;
+                }
+                if (hasNouhin && (hasSanchi || hasHinmei)) {
+                    isHaibun = true;
+                    console.log('ヘッダー構造で配分表を検出:', 'row:', r);
+                }
             }
-            if (hasNouhin && (hasSanchi || hasHinmei)) {
-                isHaibun = true;
-                console.log('ヘッダー構造で配分表を検出:', 'row:', r);
-                break;
-            }
+
+            // インプロが確定したらループ終了
+            if (isImpro) break;
         }
         if (isHaibun || isImpro) break;
     }
@@ -2087,39 +2112,53 @@ function parseImproFormat(wb, fileName) {
             const row = json[r];
             if (!row || row.length === 0) continue;
 
-            // 品名を探す（漢字/ひらがな/カタカナを含む文字列）
-            for (let c = 0; c < Math.min(5, row.length); c++) {
-                const cell = String(row[c] || '').trim();
-                if (cell && /[ぁ-んァ-ン一-龥]/.test(cell) && cell.length >= 2) {
-                    // 県産、産地などのキーワードを含む場合は品名
-                    if (cell.indexOf('県産') >= 0 || cell.indexOf('産') >= 0 ||
-                        /[果野菜魚肉豆乳卵]/.test(cell)) {
-                        curProdName = extractProductName(cell);
-                        console.log('品名検出:', curProdName, '行:', r);
-                        break;
-                    }
-                }
-            }
-
-            // 日付を探す（12/23, 12/23(火) など）
+            // この行に日付があるかチェック
             let dateStr = null;
+            let dateCol = -1;
             for (let c = 0; c < Math.min(8, row.length); c++) {
                 const cell = String(row[c] || '').trim();
                 const dateMatch = cell.match(/(\d{1,2})\/(\d{1,2})/);
                 if (dateMatch) {
                     dateStr = parseInt(dateMatch[1]) + '/' + parseInt(dateMatch[2]);
+                    dateCol = c;
                     break;
                 }
             }
 
-            if (!dateStr) continue;
+            // 日付がない行は品名行の可能性をチェック
+            if (!dateStr) {
+                // 品名を探す（漢字/ひらがな/カタカナを含む文字列）
+                for (let c = 0; c < Math.min(6, row.length); c++) {
+                    const cell = String(row[c] || '').trim();
+                    if (!cell || cell.length < 2) continue;
 
+                    // 日付パターンではない、かつ日本語を含む文字列
+                    if (/[ぁ-んァ-ン一-龥]/.test(cell) && !/\d+\/\d+/.test(cell)) {
+                        // 品名として適切かチェック
+                        if (cell.indexOf('県産') >= 0 || cell.indexOf('産') >= 0 ||
+                            cell.indexOf('みかん') >= 0 || cell.indexOf('ぶどう') >= 0 ||
+                            cell.indexOf('りんご') >= 0 || cell.indexOf('いちご') >= 0 ||
+                            cell.indexOf('房') >= 0 || cell.indexOf('袋') >= 0 ||
+                            cell.indexOf('王') >= 0 || // 甘熟王など
+                            /[ァ-ン]{2,}/.test(cell) || // カタカナ2文字以上
+                            cell.length >= 4) { // 4文字以上の日本語
+                            curProdName = extractProductName(cell);
+                            console.log('品名検出:', curProdName, '行:', r, '列:', c, '元:', cell);
+                            break;
+                        }
+                    }
+                }
+                continue; // 日付がない行はスキップ
+            }
+
+            // 日付がある行（データ行）の処理
             // 原価・売価を探す（数値が2つ連続する列）
-            for (let c = 3; c < Math.min(storeStartCol, 10); c++) {
+            for (let c = Math.max(1, dateCol); c < Math.min(storeStartCol - 2, 10); c++) {
                 const val1 = Number(row[c]);
                 const val2 = Number(row[c + 1]);
                 if (!isNaN(val1) && val1 >= 10 && val1 < 50000 &&
-                    !isNaN(val2) && val2 >= 10 && val2 < 50000) {
+                    !isNaN(val2) && val2 >= 10 && val2 < 50000 &&
+                    val1 !== val2) {
                     // 小さい方が原価、大きい方が売価
                     if (val1 < val2) {
                         curCost = val1;
@@ -2132,12 +2171,11 @@ function parseImproFormat(wb, fileName) {
                 }
             }
 
-            // 入数を探す（原価・売価の後の1-100の数値）
-            for (let c = 5; c < Math.min(storeStartCol, 10); c++) {
+            // 入数を探す
+            for (let c = 5; c < Math.min(storeStartCol - 1, 12); c++) {
                 const val = Number(row[c]);
                 if (!isNaN(val) && val >= 1 && val <= 100 && Number.isInteger(val)) {
-                    // 原価・売価より小さい値を入数とする
-                    if (val < (curCost || 999)) {
+                    if (curCost && val < curCost && val < (curPrice || 999)) {
                         curUnit = val;
                         break;
                     }
@@ -2146,12 +2184,22 @@ function parseImproFormat(wb, fileName) {
 
             // 店舗別数量をチェック
             let hasQty = false;
+            let totalQty = 0;
             storeCols.forEach(sc => {
                 const q = Number(row[sc.col]);
-                if (q > 0) hasQty = true;
+                if (q > 0) {
+                    hasQty = true;
+                    totalQty += q;
+                }
             });
 
-            if (!hasQty || !curProdName) continue;
+            if (!hasQty) continue;
+
+            // 品名がない場合はスキップ
+            if (!curProdName) {
+                console.log('品名なしでスキップ:', '行:', r, '日付:', dateStr, '数量:', totalQty);
+                continue;
+            }
 
             // 商品情報を登録
             const prodKey = curProdName;
