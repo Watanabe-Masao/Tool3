@@ -1943,6 +1943,7 @@ function parseHaibunFormat(wb, fileName) {
 function detectAndParseWorkbook(wb, fileName) {
     // 全シートをチェック
     let isHaibun = false;
+    let isImpro = false;
 
     for (const sheetName of wb.SheetNames) {
         const sheet = wb.Sheets[sheetName];
@@ -1951,6 +1952,20 @@ function detectAndParseWorkbook(wb, fileName) {
         for (let r = 0; r < Math.min(15, json.length); r++) {
             const row = json[r] || [];
             const rowStr = row.join('');
+
+            // 週間インプロ形式の検出
+            if (rowStr.indexOf('週間インプロ') >= 0 || rowStr.indexOf('インプロ') >= 0) {
+                isImpro = true;
+                console.log('週間インプロキーワード検出:', rowStr.substring(0, 50), 'row:', r);
+                break;
+            }
+
+            // 特売原価/特売売価の検出（インプロ形式の特徴）
+            if (rowStr.indexOf('特売原価') >= 0 || rowStr.indexOf('特売売価') >= 0) {
+                isImpro = true;
+                console.log('特売原価/売価キーワード検出:', rowStr.substring(0, 50), 'row:', r);
+                break;
+            }
 
             // 配分表のキーワード検出
             if (rowStr.indexOf('配分') >= 0 || rowStr.indexOf('商品連絡書') >= 0) {
@@ -1973,14 +1988,25 @@ function detectAndParseWorkbook(wb, fileName) {
                 break;
             }
         }
-        if (isHaibun) break;
+        if (isHaibun || isImpro) break;
     }
 
-    console.log('フォーマット判定結果:', { fileName, isHaibun });
+    console.log('フォーマット判定結果:', { fileName, isHaibun, isImpro });
 
-    if (isHaibun) {
+    if (isImpro) {
+        const result = parseImproFormat(wb, fileName);
+        if (result.data.length === 0) {
+            console.log('インプロパース失敗、配分表形式を試行');
+            const haibunResult = parseHaibunFormat(wb, fileName);
+            if (haibunResult.data.length === 0) {
+                console.log('配分表パース失敗、従来形式を試行');
+                return parseWorkbook(wb, fileName);
+            }
+            return haibunResult;
+        }
+        return result;
+    } else if (isHaibun) {
         const result = parseHaibunFormat(wb, fileName);
-        // 配分表パースが失敗した場合は従来形式を試す
         if (result.data.length === 0) {
             console.log('配分表パース失敗、従来形式を試行');
             return parseWorkbook(wb, fileName);
@@ -1989,6 +2015,182 @@ function detectAndParseWorkbook(wb, fileName) {
     } else {
         return parseWorkbook(wb, fileName);
     }
+}
+
+// 週間インプロ形式のパーサー
+function parseImproFormat(wb, fileName) {
+    const data = [];
+    const sheets = [];
+    const pInfo = {};
+    const prods = new Set();
+
+    wb.SheetNames.forEach(sn => {
+        const sheet = wb.Sheets[sn];
+        const json = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+        if (json.length < 10) return;
+        sheets.push(sn);
+
+        console.log('=== インプロ形式パース開始 ===', sn);
+
+        // ヘッダー行を探す（品番、特売原価などがある行）
+        let headerRowIdx = -1;
+        let storeStartCol = -1;
+        const storeCols = [];
+
+        for (let r = 0; r < Math.min(15, json.length); r++) {
+            const row = json[r] || [];
+            const rowStr = row.map(c => String(c)).join('|');
+
+            // 店舗コードがある行を探す（01, 02, 03...または数字が連続）
+            let storeCodeCount = 0;
+            let firstStoreCol = -1;
+            for (let c = 5; c < row.length; c++) {
+                const cell = String(row[c] || '').trim();
+                if (/^\d{1,3}$/.test(cell)) {
+                    if (firstStoreCol < 0) firstStoreCol = c;
+                    storeCodeCount++;
+                }
+            }
+
+            if (storeCodeCount >= 5 && firstStoreCol > 0) {
+                headerRowIdx = r;
+                storeStartCol = firstStoreCol;
+                console.log('ヘッダー行検出:', r, '店舗開始列:', storeStartCol);
+
+                // 店舗コードを収集
+                for (let c = storeStartCol; c < row.length; c++) {
+                    const code = String(row[c] || '').trim();
+                    if (/^\d{1,3}$/.test(code)) {
+                        const normalizedCode = String(parseInt(code, 10));
+                        storeCols.push({ col: c, code: normalizedCode });
+                    }
+                }
+                break;
+            }
+        }
+
+        if (headerRowIdx < 0 || storeCols.length === 0) {
+            console.log('ヘッダー行または店舗コードが見つかりません');
+            return;
+        }
+
+        console.log('検出された店舗:', storeCols.length, '件');
+
+        // データ行をパース
+        let curProdName = null;
+        let curCost = null;
+        let curPrice = null;
+        let curUnit = 1;
+
+        for (let r = headerRowIdx + 1; r < json.length; r++) {
+            const row = json[r];
+            if (!row || row.length === 0) continue;
+
+            // 品名を探す（漢字/ひらがな/カタカナを含む文字列）
+            for (let c = 0; c < Math.min(5, row.length); c++) {
+                const cell = String(row[c] || '').trim();
+                if (cell && /[ぁ-んァ-ン一-龥]/.test(cell) && cell.length >= 2) {
+                    // 県産、産地などのキーワードを含む場合は品名
+                    if (cell.indexOf('県産') >= 0 || cell.indexOf('産') >= 0 ||
+                        /[果野菜魚肉豆乳卵]/.test(cell)) {
+                        curProdName = extractProductName(cell);
+                        console.log('品名検出:', curProdName, '行:', r);
+                        break;
+                    }
+                }
+            }
+
+            // 日付を探す（12/23, 12/23(火) など）
+            let dateStr = null;
+            for (let c = 0; c < Math.min(8, row.length); c++) {
+                const cell = String(row[c] || '').trim();
+                const dateMatch = cell.match(/(\d{1,2})\/(\d{1,2})/);
+                if (dateMatch) {
+                    dateStr = parseInt(dateMatch[1]) + '/' + parseInt(dateMatch[2]);
+                    break;
+                }
+            }
+
+            if (!dateStr) continue;
+
+            // 原価・売価を探す（数値が2つ連続する列）
+            for (let c = 3; c < Math.min(storeStartCol, 10); c++) {
+                const val1 = Number(row[c]);
+                const val2 = Number(row[c + 1]);
+                if (!isNaN(val1) && val1 >= 10 && val1 < 50000 &&
+                    !isNaN(val2) && val2 >= 10 && val2 < 50000) {
+                    // 小さい方が原価、大きい方が売価
+                    if (val1 < val2) {
+                        curCost = val1;
+                        curPrice = val2;
+                    } else {
+                        curCost = val2;
+                        curPrice = val1;
+                    }
+                    break;
+                }
+            }
+
+            // 入数を探す（原価・売価の後の1-100の数値）
+            for (let c = 5; c < Math.min(storeStartCol, 10); c++) {
+                const val = Number(row[c]);
+                if (!isNaN(val) && val >= 1 && val <= 100 && Number.isInteger(val)) {
+                    // 原価・売価より小さい値を入数とする
+                    if (val < (curCost || 999)) {
+                        curUnit = val;
+                        break;
+                    }
+                }
+            }
+
+            // 店舗別数量をチェック
+            let hasQty = false;
+            storeCols.forEach(sc => {
+                const q = Number(row[sc.col]);
+                if (q > 0) hasQty = true;
+            });
+
+            if (!hasQty || !curProdName) continue;
+
+            // 商品情報を登録
+            const prodKey = curProdName;
+            if (!pInfo[prodKey]) {
+                pInfo[prodKey] = { cost: curCost, price: curPrice, unit: curUnit };
+            }
+            prods.add(prodKey);
+
+            // 店舗別数量を登録
+            let addedCount = 0;
+            storeCols.forEach(sc => {
+                const q = Number(row[sc.col]);
+                if (q > 0) {
+                    data.push({
+                        fileName,
+                        supplier: sn,
+                        product: prodKey,
+                        date: dateStr,
+                        store: sc.code,
+                        quantity: q
+                    });
+                    addedCount++;
+                }
+            });
+
+            if (addedCount > 0) {
+                console.log('データ追加:', prodKey, dateStr, addedCount + '件');
+            }
+        }
+    });
+
+    console.log('=== インプロパース結果 ===', { dataCount: data.length, productCount: prods.size });
+
+    return {
+        data,
+        sheets,
+        productInfo: pInfo,
+        products: Array.from(prods)
+    };
 }
 
 function mergeAllData() {
