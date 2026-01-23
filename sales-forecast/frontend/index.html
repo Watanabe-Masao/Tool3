@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>売上予測ダッシュボード</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- ヘッダー -->
+        <header class="header">
+            <h1>スーパーマーケット売上予測システム</h1>
+            <div class="header-info">
+                <span id="current-date"></span>
+                <span class="status-badge" id="system-status">稼働中</span>
+            </div>
+        </header>
+
+        <!-- メインコンテンツ -->
+        <main class="main-content">
+            <!-- コントロールパネル -->
+            <section class="control-panel">
+                <div class="control-group">
+                    <label for="forecast-date">予測対象日</label>
+                    <input type="date" id="forecast-date">
+                </div>
+                <div class="control-group">
+                    <label for="horizon">予測期間</label>
+                    <select id="horizon">
+                        <option value="daily">翌日予測</option>
+                        <option value="weekly">週次予測</option>
+                        <option value="monthly">月次予測</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="store-select">店舗</label>
+                    <select id="store-select">
+                        <option value="">全店舗</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="category-select">カテゴリ</label>
+                    <select id="category-select">
+                        <option value="">全カテゴリ</option>
+                    </select>
+                </div>
+                <button class="btn-primary" onclick="fetchForecast()">予測取得</button>
+            </section>
+
+            <!-- サマリーカード -->
+            <section class="summary-cards">
+                <div class="card summary-card">
+                    <div class="card-header">
+                        <h3>全社予測</h3>
+                        <span class="confidence-badge" id="total-confidence">A</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="forecast-value" id="total-forecast">¥0</div>
+                        <div class="forecast-range" id="total-range">予測区間: ¥0 〜 ¥0</div>
+                    </div>
+                </div>
+                <div class="card summary-card">
+                    <div class="card-header">
+                        <h3>予測精度</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="metric">
+                            <span class="metric-label">MAPE</span>
+                            <span class="metric-value" id="mape-value">-</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">MAE</span>
+                            <span class="metric-value" id="mae-value">-</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card summary-card">
+                    <div class="card-header">
+                        <h3>信頼度分布</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="confidence-dist" id="confidence-dist">
+                            <span class="conf-a">A: 0</span>
+                            <span class="conf-b">B: 0</span>
+                            <span class="conf-c">C: 0</span>
+                            <span class="conf-d">D: 0</span>
+                            <span class="conf-e">E: 0</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- グラフセクション -->
+            <section class="charts-section">
+                <div class="card chart-card">
+                    <div class="card-header">
+                        <h3>階層別予測</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="hierarchy-chart"></canvas>
+                    </div>
+                </div>
+                <div class="card chart-card">
+                    <div class="card-header">
+                        <h3>予測 vs 実績（過去7日間）</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="forecast-actual-chart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 詳細テーブル -->
+            <section class="detail-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>予測詳細</h3>
+                        <button class="btn-secondary" onclick="exportCSV()">CSV出力</button>
+                    </div>
+                    <div class="card-body">
+                        <table class="data-table" id="forecast-table">
+                            <thead>
+                                <tr>
+                                    <th>階層</th>
+                                    <th>店舗</th>
+                                    <th>カテゴリ</th>
+                                    <th>予測値</th>
+                                    <th>下限</th>
+                                    <th>上限</th>
+                                    <th>ベース</th>
+                                    <th>残差</th>
+                                    <th>信頼度</th>
+                                </tr>
+                            </thead>
+                            <tbody id="forecast-tbody">
+                                <!-- 動的に追加 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 変動要因パネル -->
+            <section class="factors-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>変動要因</h3>
+                    </div>
+                    <div class="card-body factors-grid">
+                        <div class="factor-item">
+                            <span class="factor-icon">🌤️</span>
+                            <div class="factor-info">
+                                <span class="factor-label">天候</span>
+                                <span class="factor-value" id="weather-factor">晴れ（影響度: 1.0）</span>
+                            </div>
+                        </div>
+                        <div class="factor-item">
+                            <span class="factor-icon">🎁</span>
+                            <div class="factor-info">
+                                <span class="factor-label">ポイント</span>
+                                <span class="factor-value" id="point-factor">通常（1倍）</span>
+                            </div>
+                        </div>
+                        <div class="factor-item">
+                            <span class="factor-icon">📅</span>
+                            <div class="factor-info">
+                                <span class="factor-label">曜日</span>
+                                <span class="factor-value" id="dow-factor">-</span>
+                            </div>
+                        </div>
+                        <div class="factor-item">
+                            <span class="factor-icon">🎉</span>
+                            <div class="factor-info">
+                                <span class="factor-label">イベント</span>
+                                <span class="factor-value" id="event-factor">なし</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- フッター -->
+        <footer class="footer">
+            <p>スーパーマーケット売上予測システム v1.0.0</p>
+            <p>2段階予測モデル × 階層整合</p>
+        </footer>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

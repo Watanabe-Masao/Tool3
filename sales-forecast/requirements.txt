@@ -1,0 +1,35 @@
+# Core
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+python-dotenv==1.0.0
+
+# Data Processing
+pandas==2.1.4
+numpy==1.26.3
+polars==0.20.3
+
+# Machine Learning
+lightgbm==4.2.0
+scikit-learn==1.3.2
+scipy==1.11.4
+
+# Database
+sqlalchemy==2.0.25
+aiosqlite==0.19.0
+
+# Date/Time
+jpholiday==0.1.9
+python-dateutil==2.8.2
+
+# HTTP Client (for weather API)
+httpx==0.26.0
+aiohttp==3.9.1
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+
+# Utilities
+pyyaml==6.0.1
+loguru==0.7.2
