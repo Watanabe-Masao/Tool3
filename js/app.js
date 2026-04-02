@@ -376,10 +376,12 @@ function renderTagStatsModalTables() {
             const profit = calcProfit(d);
             const profitClass = profit >= 0 ? 'positive' : 'negative';
             const crossRatio = calcCrossRatio(d, tag3BaseTotal.qty);
-            html3 += '<tr>';
+            const isExpanded = expandedTag3Key === key;
+            const keyEsc = key.replace(/'/g, "\\'");
+            html3 += '<tr class="tag3-row' + (isExpanded ? ' expanded' : '') + '" onclick="toggleTag3Products(\'' + keyEsc + '\')" style="cursor:pointer;">';
             html3 += '<td class="col-parent">' + escapeHtml(d.tag1) + '</td>';
             html3 += '<td class="col-parent">' + escapeHtml(d.tag2) + '</td>';
-            html3 += '<td class="col-name">' + escapeHtml(d.tag3) + '</td>';
+            html3 += '<td class="col-name">' + (isExpanded ? '▼ ' : '▶ ') + escapeHtml(d.tag3) + '</td>';
             html3 += '<td class="col-num">' + d.qty.toLocaleString() + '</td>';
             html3 += '<td class="col-num">¥' + d.cost.toLocaleString() + '</td>';
             html3 += '<td class="col-num">¥' + d.price.toLocaleString() + '</td>';
@@ -388,6 +390,28 @@ function renderTagStatsModalTables() {
             html3 += '<td class="col-bar">' + renderBarCell(d.qty, tag3BaseTotal.qty) + '</td>';
             html3 += '<td class="col-num">' + renderCrossRatioCell(crossRatio) + '</td>';
             html3 += '</tr>';
+
+            // 展開時に品名詳細を表示
+            if (isExpanded) {
+                const products = getProductsForTag3(d.tag1, d.tag2, d.tag3);
+                html3 += '<tr class="tag3-products-row"><td colspan="10">';
+                html3 += '<div class="tag3-products-container">';
+                html3 += '<table class="tag3-products-table">';
+                html3 += '<thead><tr><th>品名</th><th>数量</th><th>原価</th><th>売価</th><th>原価計</th><th>売価計</th></tr></thead>';
+                html3 += '<tbody>';
+                products.forEach(function (prod) {
+                    html3 += '<tr>';
+                    html3 += '<td class="prod-name">' + escapeHtml(prod.name) + '</td>';
+                    html3 += '<td class="prod-num">' + prod.qty.toLocaleString() + '</td>';
+                    html3 += '<td class="prod-num">¥' + prod.cost.toLocaleString() + '</td>';
+                    html3 += '<td class="prod-num">¥' + prod.price.toLocaleString() + '</td>';
+                    html3 += '<td class="prod-num">¥' + prod.totalCost.toLocaleString() + '</td>';
+                    html3 += '<td class="prod-num">¥' + prod.totalPrice.toLocaleString() + '</td>';
+                    html3 += '</tr>';
+                });
+                html3 += '</tbody></table>';
+                html3 += '</div></td></tr>';
+            }
         });
     }
     document.getElementById('modal-tag3-tbody').innerHTML = html3;
@@ -422,6 +446,46 @@ function filterTagModal2(key) {
     renderTagStatsModalTables();
 }
 window.filterTagModal2 = filterTagModal2;
+
+// 小分類の品名詳細を表示/非表示
+let expandedTag3Key = null;
+function toggleTag3Products(key) {
+    if (expandedTag3Key === key) {
+        expandedTag3Key = null; // 同じものをクリックで閉じる
+    } else {
+        expandedTag3Key = key;
+    }
+    renderTagStatsModalTables();
+}
+window.toggleTag3Products = toggleTag3Products;
+
+// 指定した小分類に属する品名リストを取得
+function getProductsForTag3(tag1, tag2, tag3) {
+    const products = [];
+    currentProducts.forEach(function (p) {
+        const t1 = getTag(p, 1) || '(未設定)';
+        const t2 = getTag(p, 2) || '(未設定)';
+        const t3 = getTag(p, 3) || '(未設定)';
+        if (t1 === tag1 && t2 === tag2 && t3 === tag3) {
+            const info = (productInfo[p] || {});
+            const qty = currentPivot[p] ? (currentPivot[p].total || 0) : 0;
+            const unit = info.unit || 1;
+            products.push({
+                name: p,
+                qty: qty,
+                cost: info.cost || 0,
+                price: info.price || 0,
+                unit: unit,
+                totalCost: (info.cost || 0) * qty * unit,
+                totalPrice: (info.price || 0) * qty * unit
+            });
+        }
+    });
+    // 数量の多い順にソート
+    products.sort((a, b) => b.qty - a.qty);
+    return products;
+}
+
 function showSaveModal() {
     if (loadedFiles.length === 0) {
         showToast('データがありません');
@@ -1105,46 +1169,228 @@ fileInputMini.addEventListener('change', (e) => { if (e.target.files.length > 0)
     e.target.value = '';
 } });
 function handleFiles(files) {
-    const valid = Array.from(files).filter((f) => ['.xls', '.xlsx'].includes(f.name.substring(f.name.lastIndexOf('.')).toLowerCase()));
+    const valid = Array.from(files).filter((f) => ['.xls', '.xlsx', '.csv'].includes(f.name.substring(f.name.lastIndexOf('.')).toLowerCase()));
+    const invalid = Array.from(files).filter((f) => !['.xls', '.xlsx', '.csv'].includes(f.name.substring(f.name.lastIndexOf('.')).toLowerCase()));
+
+    if (invalid.length > 0) {
+        showToast('⚠️ 非対応ファイル: ' + invalid.map(f => f.name).join(', '));
+    }
+
     if (valid.length === 0) {
-        alert('Excelファイル（.xls, .xlsx）を選択してください');
+        alert('Excelファイル（.xls, .xlsx）またはCSVファイルを選択してください');
         return;
     }
+
     dropZone.style.display = 'none';
     document.getElementById('loading').classList.add('show');
-    let done = 0;
+
+    // ファイルを分類するための一時保存
+    const pendingFiles = [];
+    let classifiedCount = 0;
+
+    // まず全ファイルを読み込んで分類
     valid.forEach((file) => {
-        if (loadedFiles.some(f => f.name === file.name)) {
-            done++;
-            if (done === valid.length)
-                finishLoading();
-            return;
-        }
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
                 const result = e.target?.result;
-                const wb = XLSX.read(new Uint8Array(result), { type: 'array' });
-                const fd = parseWorkbook(wb, file.name);
-                loadedFiles.push({ id: Date.now() + Math.random(), name: file.name, size: file.size, ...fd });
+                const fileType = classifyFile(file, result);
+                pendingFiles.push({ file, result, type: fileType });
+            } catch (err) {
+                console.error('ファイル分類エラー:', file.name, err);
+                pendingFiles.push({ file, result: null, type: 'error', error: err });
             }
-            catch (err) {
-                alert(file.name + ' の読み込みに失敗しました');
+            classifiedCount++;
+            if (classifiedCount === valid.length) {
+                processClassifiedFiles(pendingFiles);
             }
-            done++;
-            if (done === valid.length)
-                finishLoading();
         };
         reader.readAsArrayBuffer(file);
     });
 }
-function finishLoading() {
+
+// ファイルの種類を判定
+function classifyFile(file, result) {
+    // ファイル名でタグテンプレートを判定
+    if (file.name.indexOf('タグ') >= 0 || file.name.indexOf('テンプレート') >= 0) {
+        return 'tag';
+    }
+
+    // ファイル内容から判定
+    let data;
+    try {
+        if (file.name.endsWith('.csv')) {
+            const text = new TextDecoder('utf-8').decode(new Uint8Array(result));
+            const lines = text.split(/\r?\n/).filter(l => l.trim());
+            data = lines.slice(0, 10).map(l => l.split(',').map(c => c.replace(/^"|"$/g, '').trim()));
+        } else {
+            const wb = XLSX.read(new Uint8Array(result), { type: 'array' });
+            data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' }).slice(0, 15);
+        }
+    } catch (err) {
+        return 'unknown';
+    }
+
+    // ヘッダー行を探してファイル種類を判定
+    for (let i = 0; i < Math.min(10, data.length); i++) {
+        const row = data[i].map(c => String(c).toLowerCase());
+        const rowStr = row.join('');
+
+        // 配分表/商品連絡書の検出
+        if (rowStr.indexOf('配分') >= 0 || rowStr.indexOf('商品連絡書') >= 0) {
+            return 'data';
+        }
+
+        // タグテンプレートの検出
+        const hasProdCol = row.some(c => c.indexOf('品目') >= 0 || c.indexOf('商品名') >= 0);
+        const hasTagCol = row.some(c => c.indexOf('大分類') >= 0 || c.indexOf('中分類') >= 0 || c.indexOf('小分類') >= 0);
+        const hasStoreOrQty = row.some(c => /^\d{1,3}$/.test(c) || c.indexOf('数量') >= 0 || c.indexOf('合計') >= 0);
+
+        if (hasProdCol && hasTagCol && !hasStoreOrQty) {
+            return 'tag';
+        }
+
+        // 通常のデータファイルの検出（店舗コードや数量がある）
+        if (hasStoreOrQty || rowStr.indexOf('納品') >= 0 || rowStr.indexOf('店番') >= 0) {
+            return 'data';
+        }
+    }
+
+    // 判定できない場合はデータファイルとして試す
+    return 'data';
+}
+
+// 分類されたファイルを順番に処理
+function processClassifiedFiles(pendingFiles) {
+    const dataFiles = pendingFiles.filter(f => f.type === 'data');
+    const tagFiles = pendingFiles.filter(f => f.type === 'tag');
+    const unknownFiles = pendingFiles.filter(f => f.type === 'unknown' || f.type === 'error');
+
+    if (unknownFiles.length > 0) {
+        showToast('⚠️ 形式不明: ' + unknownFiles.map(f => f.file.name).join(', '));
+    }
+
+    let dataFilesProcessed = 0;
+    let tagFilesProcessed = 0;
+
+    // 1. まずデータファイルを処理
+    dataFiles.forEach(({ file, result }) => {
+        if (loadedFiles.some(f => f.name === file.name)) {
+            return; // 既に読み込み済み
+        }
+        try {
+            const wb = XLSX.read(new Uint8Array(result), { type: 'array' });
+            const fd = detectAndParseWorkbook(wb, file.name);
+            if (fd.data && fd.data.length > 0) {
+                loadedFiles.push({ id: Date.now() + Math.random(), name: file.name, size: file.size, ...fd });
+                dataFilesProcessed++;
+            } else {
+                showToast('⚠️ データなし: ' + file.name);
+            }
+        } catch (err) {
+            console.error('データファイル処理エラー:', file.name, err);
+            showToast('❌ 読込失敗: ' + file.name);
+        }
+    });
+
+    // 2. データをマージしてからタグテンプレートを処理
+    if (dataFilesProcessed > 0 || loadedFiles.length > 0) {
+        mergeAllData();
+    }
+
+    // 3. タグテンプレートを処理（データファイルの後）
+    tagFiles.forEach(({ file, result }) => {
+        try {
+            const count = processTagTemplateFile(file, result);
+            if (count > 0) {
+                tagFilesProcessed++;
+            }
+        } catch (err) {
+            console.error('タグテンプレート処理エラー:', file.name, err);
+            showToast('❌ タグ読込失敗: ' + file.name);
+        }
+    });
+
+    finishLoading(tagFilesProcessed, dataFilesProcessed);
+}
+
+// タグテンプレートファイルを処理
+function processTagTemplateFile(file, result) {
+    let data;
+    if (file.name.endsWith('.csv')) {
+        const text = new TextDecoder('utf-8').decode(new Uint8Array(result));
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        data = lines.map(l => l.split(',').map(c => c.replace(/^"|"$/g, '').trim()));
+    } else {
+        const wb = XLSX.read(new Uint8Array(result), { type: 'array' });
+        data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+    }
+
+    var headerIdx = 0;
+    for (var i = 0; i < Math.min(5, data.length); i++) {
+        const row = data[i].map(c => String(c).toLowerCase());
+        if (row.some(c => c.indexOf('品目') >= 0 || c.indexOf('商品') >= 0 || c.indexOf('product') >= 0)) {
+            headerIdx = i;
+            break;
+        }
+    }
+    const header = data[headerIdx].map(c => String(c).toLowerCase());
+    const prodCol = header.findIndex(c => c.indexOf('品目') >= 0 || c.indexOf('商品') >= 0 || c.indexOf('product') >= 0);
+    const tag1Col = header.findIndex(c => c.indexOf('大分類') >= 0 || c.indexOf('親') >= 0 || c.indexOf('tag1') >= 0);
+    const tag2Col = header.findIndex(c => c.indexOf('中分類') >= 0 || c.indexOf('子') >= 0 || c.indexOf('tag2') >= 0);
+    const tag3Col = header.findIndex(c => c.indexOf('小分類') >= 0 || c.indexOf('孫') >= 0 || c.indexOf('tag3') >= 0);
+
+    if (prodCol === -1) {
+        showToast('❌ タグテンプレート: 品目名列が見つかりません (' + file.name + ')');
+        return 0;
+    }
+
+    var count = 0, updatedCount = 0;
+    for (var i = headerIdx + 1; i < data.length; i++) {
+        const row = data[i];
+        const prod = String(row[prodCol] || '').trim();
+        if (!prod) continue;
+
+        let matchedProd = allProducts.find(p => p === prod);
+        if (!matchedProd) {
+            const partialMatches = allProducts.filter(p => p.indexOf(prod) >= 0 || prod.indexOf(p) >= 0);
+            if (partialMatches.length > 0) {
+                partialMatches.sort((a, b) => Math.abs(a.length - prod.length) - Math.abs(b.length - prod.length));
+                matchedProd = partialMatches[0];
+            }
+        }
+
+        if (matchedProd) {
+            if (!productTags[matchedProd]) productTags[matchedProd] = {};
+            var hasChange = false;
+            if (tag1Col >= 0) {
+                const newVal = String(row[tag1Col] || '').trim();
+                if (newVal) { productTags[matchedProd].tag1 = newVal; hasChange = true; }
+            }
+            if (tag2Col >= 0) {
+                const newVal = String(row[tag2Col] || '').trim();
+                if (newVal) { productTags[matchedProd].tag2 = newVal; hasChange = true; }
+            }
+            if (tag3Col >= 0) {
+                const newVal = String(row[tag3Col] || '').trim();
+                if (newVal) { productTags[matchedProd].tag3 = newVal; hasChange = true; }
+            }
+            if (hasChange) updatedCount++;
+            count++;
+        }
+    }
+
+    console.log('タグテンプレート読込完了:', file.name, { マッチ: count, 更新: updatedCount });
+    return updatedCount;
+}
+
+function finishLoading(tagFilesProcessed = 0, dataFilesProcessed = 0) {
     document.getElementById('loading').classList.remove('show');
-    if (loadedFiles.length === 0) {
+    if (loadedFiles.length === 0 && tagFilesProcessed === 0) {
         dropZone.style.display = 'flex';
         return;
     }
-    mergeAllData();
+    // mergeAllDataは processClassifiedFiles で既に呼び出し済み
     selectedFiles = new Set(loadedFiles.map(f => f.id));
     // 新規ファイルをcustomFileOrderに追加
     const existingIds = new Set(customFileOrder);
@@ -1162,7 +1408,17 @@ function finishLoading() {
     // フィードバック: 読み込んだデータ件数を通知
     const totalRecords = rawData.data.length;
     const totalProducts = rawData.products.length;
-    showToast(`✅ ${loadedFiles.length}ファイル読込完了 (${totalProducts}品目、${totalRecords}件のデータ)`);
+    let msg = '';
+    if (dataFilesProcessed > 0) {
+        msg += `✅ ${loadedFiles.length}ファイル読込完了 (${totalProducts}品目、${totalRecords}件のデータ)`;
+    }
+    if (tagFilesProcessed > 0) {
+        if (msg) msg += '\n';
+        msg += `🏷️ タグテンプレート${tagFilesProcessed}件を適用しました`;
+        updateTagStats();
+        renderTable();
+    }
+    if (msg) showToast(msg);
 }
 function parseWorkbook(wb, fileName) {
     const data = [];
@@ -1243,6 +1499,741 @@ function parseWorkbook(wb, fileName) {
         products: Array.from(prods)
     };
 }
+
+// 配分表形式のパーサー
+function parseHaibunFormat(wb, fileName) {
+    const data = [];
+    const sheets = [];
+    const pInfo = {};
+    const prods = new Set();
+
+    console.log('=== parseHaibunFormat開始 ===', fileName);
+    console.log('シート一覧:', wb.SheetNames);
+
+    wb.SheetNames.forEach((sn) => {
+        console.log('--- シート処理:', sn, '---');
+        const json = window.XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: '' });
+        console.log('行数:', json.length);
+
+        if (json.length < 8) {
+            console.log('行数不足(8未満)でスキップ');
+            return;
+        }
+
+        // 最初の10行を出力
+        console.log('先頭10行のデータ:');
+        for (let r = 0; r < Math.min(10, json.length); r++) {
+            const row = json[r] || [];
+            console.log('行' + r + ':', row.slice(0, 12).map(c => String(c || '').substring(0, 8)));
+        }
+
+        // 配分表形式かどうかを検出
+        let isHaibun = false;
+        let headerRowIdx = -1;
+
+        for (let r = 0; r < Math.min(15, json.length); r++) {
+            const rowStr = (json[r] || []).join('');
+            if (rowStr.indexOf('配分') >= 0 || rowStr.indexOf('商品連絡書') >= 0) {
+                isHaibun = true;
+                console.log('配分/商品連絡書キーワード発見 行:', r);
+            }
+            // ヘッダー行を探す（納品日を含む行）
+            const row = json[r] || [];
+            for (let c = 0; c < Math.min(15, row.length); c++) {
+                const cell = String(row[c] || '').trim();
+                if (cell === '納品日' || cell === '納品' || cell.indexOf('納品日') >= 0) {
+                    headerRowIdx = r;
+                    console.log('納品日発見 行:', r, '列:', c, '値:', cell);
+                    break;
+                }
+            }
+            if (headerRowIdx >= 0) break;
+        }
+
+        console.log('検出結果:', { isHaibun, headerRowIdx });
+
+        if (!isHaibun && headerRowIdx < 0) {
+            console.log('配分形式でなく、納品日も見つからないのでスキップ');
+            return;
+        }
+
+        // ヘッダー行がまだ見つからない場合、数字の並びから店舗コード行を探す
+        if (headerRowIdx < 0) {
+            console.log('ヘッダー行を数字列から探索...');
+            for (let r = 4; r < Math.min(15, json.length); r++) {
+                const row = json[r] || [];
+                let numCount = 0;
+                for (let c = 5; c < Math.min(60, row.length); c++) {
+                    const cell = String(row[c] || '').trim();
+                    if (/^\d{1,3}$/.test(cell)) numCount++;
+                }
+                console.log('行' + r + ': 店舗コード候補数=' + numCount);
+                if (numCount >= 3) {
+                    headerRowIdx = r;
+                    console.log('行' + r + 'をヘッダー行として採用');
+                    break;
+                }
+            }
+        }
+
+        if (headerRowIdx < 0) {
+            console.log('ヘッダー行が見つからないためスキップ');
+            return;
+        }
+
+        sheets.push(sn);
+
+        // ヘッダー行から店舗コードを取得
+        const hdrRow = json[headerRowIdx] || [];
+        console.log('ヘッダー行(行' + headerRowIdx + '):', hdrRow.slice(0, 25));
+
+        const storeCols = [];
+        let storeStartCol = -1;
+
+        // 列マッピングを検出
+        let colDate = 1; // デフォルトは列B
+
+        for (let c = 0; c < hdrRow.length; c++) {
+            const cell = String(hdrRow[c] || '').trim();
+            if (cell === '納品日' || cell === '納品') {
+                colDate = c;
+            }
+            // 店舗コード列の検出（1-3桁の数字）
+            if (/^\d{1,3}$/.test(cell) && storeStartCol < 0 && c >= 5) {
+                storeStartCol = c;
+                console.log('店舗コード開始: 列' + c, '値:', cell);
+            }
+        }
+
+        // 店舗コードを収集
+        console.log('店舗コード開始列:', storeStartCol);
+        if (storeStartCol > 0) {
+            for (let c = storeStartCol; c < hdrRow.length; c++) {
+                const code = String(hdrRow[c] || '').trim();
+                if (code === '合計' || code === '計' || code.indexOf('納品') >= 0) {
+                    console.log('合計列で終了:', c, code);
+                    break;
+                }
+                if (/^\d+$/.test(code)) {
+                    // 先頭ゼロを除去して正規化（01→1, 02→2）
+                    const normalizedCode = String(parseInt(code, 10));
+                    storeCols.push({ col: c, code: normalizedCode });
+                }
+            }
+        }
+
+        console.log('検出された店舗:', storeCols.length, '件', storeCols.slice(0, 8).map(s => s.code));
+
+        if (storeCols.length === 0) {
+            console.log('店舗コードが見つからないためスキップ');
+            return;
+        }
+
+        // データ行をパース
+        let curDate = null;
+        let curTaxExcludedPrice = null; // 税抜価格（産地行から取得）
+        let debugRowCount = 0;
+
+        for (let r = headerRowIdx + 1; r < json.length; r++) {
+            const row = json[r];
+            if (!row || row.length === 0) continue;
+
+            // 最初の15行をデバッグ出力
+            if (debugRowCount < 15) {
+                console.log('データ行' + r + ':', row.slice(0, 15));
+                debugRowCount++;
+            }
+
+            // 日付を探す（12/21, 12/21(日)、またはExcelシリアル番号形式）
+            let foundDateInRow = false;
+            for (let c = 0; c < Math.min(6, row.length); c++) {
+                const cellVal = row[c];
+                const cellStr = String(cellVal || '');
+
+                // MM/DD形式をチェック
+                const dm = cellStr.match(/(\d{1,2})\/(\d{1,2})/);
+                if (dm) {
+                    curDate = parseInt(dm[1]) + '/' + parseInt(dm[2]);
+                    foundDateInRow = true;
+                    console.log('日付検出(文字列):', curDate, '行:', r);
+                    break;
+                }
+
+                // Excelシリアル番号形式をチェック（40000-50000程度の数値）
+                const numVal = Number(cellVal);
+                if (numVal >= 40000 && numVal <= 55000) {
+                    // Excelシリアル番号を日付に変換
+                    const excelDate = new Date((numVal - 25569) * 86400 * 1000);
+                    const m = excelDate.getMonth() + 1;
+                    const d = excelDate.getDate();
+                    curDate = m + '/' + d;
+                    foundDateInRow = true;
+                    console.log('日付検出(Excel):', curDate, '元値:', numVal, '行:', r);
+                    break;
+                }
+            }
+
+            // 日付がある行（産地行）から税抜価格を取得（列7付近）
+            if (foundDateInRow) {
+                // 列7または列8付近から税抜価格を探す
+                for (let c = 6; c < Math.min(10, row.length); c++) {
+                    const numVal = Number(row[c]);
+                    if (numVal >= 10 && numVal < 50000 && Number.isInteger(numVal)) {
+                        curTaxExcludedPrice = numVal;
+                        console.log('税抜価格検出:', curTaxExcludedPrice, '列:', c, '行:', r);
+                        break;
+                    }
+                }
+            }
+
+            // 店舗列に数量があるかチェック
+            let rowHasQty = false;
+            let totalQty = 0;
+            const qtyList = [];
+            storeCols.forEach(sc => {
+                const q = Number(row[sc.col]);
+                if (q > 0) {
+                    rowHasQty = true;
+                    totalQty += q;
+                    qtyList.push(sc.code + ':' + q);
+                }
+            });
+
+            // 品名を探す（列0-8の範囲で日本語文字を含む文字列）
+            let foundProd = '';
+            let prodCol = -1; // 品名の列位置を記録
+            for (let c = 0; c < Math.min(9, storeStartCol); c++) {
+                const cellStr = String(row[c] || '').trim();
+                if (!cellStr) continue;
+                // 品名として適切か判定
+                const isProductName =
+                    /[ぁ-んァ-ンー一-龥]/.test(cellStr) && // 日本語を含む
+                    !/^\d+$/.test(cellStr) && // 数字のみではない
+                    cellStr.indexOf('県産') < 0 && // 県産を含まない
+                    !/^\d+\s*(入|束|玉|袋|個|本|kg|g)$/.test(cellStr) && // 単位表記ではない
+                    cellStr.length >= 1 && cellStr.length <= 30; // 適切な長さ
+
+                if (isProductName) {
+                    foundProd = cellStr;
+                    prodCol = c;
+                    break;
+                }
+            }
+
+            // 規格を探す（品名の次の列）
+            let spec = '';
+            if (prodCol >= 0 && prodCol + 1 < storeStartCol) {
+                const specCell = String(row[prodCol + 1] || '').trim();
+                // 規格として適切か判定（数字・単位表記ではなく、日本語またはアルファベットを含む）
+                if (specCell &&
+                    !/^\d+$/.test(specCell) &&
+                    !/^\d+\s*(入|束|玉|袋|個|本|kg|g|円)/.test(specCell) &&
+                    specCell.length <= 20) {
+                    spec = specCell;
+                }
+            }
+
+            // デバッグ: 行の状態を出力
+            if (rowHasQty || foundProd) {
+                console.log('行' + r + ':', { 日付: curDate, 品名: foundProd, 規格: spec, 品名列: prodCol, 数量あり: rowHasQty, 合計: totalQty });
+            }
+
+            if (!rowHasQty) continue;
+            if (!foundProd || prodCol < 0) {
+                console.log('行' + r + ': 品名が見つからないためスキップ', row.slice(0, 9));
+                continue;
+            }
+
+            // 品名を正規化
+            let baseProdName = extractProductName(foundProd);
+            // 規格があれば品名に付加
+            if (spec) {
+                baseProdName = baseProdName + '（' + spec + '）';
+            }
+
+            // 原価・売価・入数を品名位置を基準に相対的に取得
+            let cost = null, unit = null;
+            // 税抜価格は産地行から取得済み
+            let price = curTaxExcludedPrice;
+
+            // 品名位置から相対的に探す（品名+3=原価、品名+5=入数が一般的）
+            // 原価: 品名の3列後
+            const costCol = prodCol + 3;
+            if (costCol < row.length) {
+                const costVal = Number(row[costCol]);
+                if (!isNaN(costVal) && costVal >= 10 && costVal < 50000) {
+                    cost = costVal;
+                    console.log('原価検出(相対):', cost, '列:', costCol);
+                }
+            }
+
+            // 入数: 品名の5列後
+            const unitCol = prodCol + 5;
+            let unitType = 'pcs'; // デフォルトは個数単位
+            if (unitCol < row.length) {
+                const unitStr = String(row[unitCol] || '');
+                // 全角数字・全角英字を半角に変換
+                const normalizedStr = unitStr
+                    .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+                    .replace(/[Ａ-Ｚａ-ｚ]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+
+                console.log('入数セル解析:', { 元値: unitStr, 変換後: normalizedStr, 列: unitCol });
+
+                // Kg/K/キロのパターンを先にチェック
+                const kgMatch = normalizedStr.match(/(\d+)\s*([Kk][Gg]?|キロ|ｷﾛ)/);
+                if (kgMatch) {
+                    unit = parseInt(kgMatch[1]);
+                    unitType = 'kg';
+                    console.log('入数検出(Kg単位):', unit, 'Kg', '元値:', unitStr);
+                } else {
+                    // gのみのパターン
+                    const gMatch = normalizedStr.match(/(\d+)\s*[Gg]/);
+                    if (gMatch) {
+                        unit = parseInt(gMatch[1]);
+                        unitType = 'g';
+                        console.log('入数検出(g単位):', unit, 'g', '元値:', unitStr);
+                    } else {
+                        // 単位付きパターン（8入、10束など）
+                        const unitMatch = normalizedStr.match(/(\d+)\s*(入|束|玉|袋|個|本|ｹｰｽ|ケース)/);
+                        if (unitMatch) {
+                            unit = parseInt(unitMatch[1]);
+                            console.log('入数検出(相対・単位付):', unit, '元値:', unitStr, '列:', unitCol);
+                        } else {
+                            // 数字のみのパターン（1, 28など）
+                            const numOnly = parseInt(normalizedStr.replace(/[^\d]/g, ''));
+                            if (!isNaN(numOnly) && numOnly >= 1 && numOnly <= 100) {
+                                unit = numOnly;
+                                console.log('入数検出(相対・数字のみ):', unit, '元値:', unitStr, '列:', unitCol);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 相対位置で見つからなかった場合、従来の方法でフォールバック
+            if (cost === null || unit === null) {
+                for (let c = prodCol + 1; c < Math.min(storeStartCol, prodCol + 7); c++) {
+                    const cellStr = String(row[c] || '');
+                    const normalizedStr = cellStr
+                        .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+                        .replace(/[Ａ-Ｚａ-ｚ]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+
+                    // 入数パターン（単位付きまたは数字のみ）
+                    if (unit === null) {
+                        // Kg/K/キロのパターンを先にチェック
+                        const kgMatch = normalizedStr.match(/(\d+)\s*([Kk][Gg]?|キロ|ｷﾛ)/);
+                        if (kgMatch) {
+                            unit = parseInt(kgMatch[1]);
+                            unitType = 'kg';
+                            console.log('入数検出(フォールバック・Kg):', unit, 'Kg', '列:', c);
+                            continue;
+                        }
+                        // gのみのパターン
+                        const gMatch = normalizedStr.match(/(\d+)\s*[Gg]/);
+                        if (gMatch) {
+                            unit = parseInt(gMatch[1]);
+                            unitType = 'g';
+                            console.log('入数検出(フォールバック・g):', unit, 'g', '列:', c);
+                            continue;
+                        }
+                        // 他の単位パターン
+                        const unitMatch = normalizedStr.match(/(\d+)\s*(入|束|玉|袋|個|本|ｹｰｽ|ケース)/);
+                        if (unitMatch) {
+                            unit = parseInt(unitMatch[1]);
+                            console.log('入数検出(フォールバック・単位付):', unit, '列:', c);
+                            continue;
+                        }
+                        // 数字のみのパターン（1-100の範囲）
+                        const numOnly = parseInt(normalizedStr.replace(/[^\d]/g, ''));
+                        if (!isNaN(numOnly) && numOnly >= 1 && numOnly <= 100 && normalizedStr.trim() === String(numOnly)) {
+                            unit = numOnly;
+                            console.log('入数検出(フォールバック・数字のみ):', unit, '列:', c);
+                            continue;
+                        }
+                    }
+
+                    // 原価
+                    if (cost === null) {
+                        const numVal = parseFloat(normalizedStr.replace(/[^\d.]/g, ''));
+                        if (!isNaN(numVal) && numVal >= 10 && numVal < 50000) {
+                            cost = numVal;
+                            console.log('原価検出(フォールバック):', cost, '列:', c);
+                        }
+                    }
+                }
+            }
+
+            // 100gあたり単価の場合、Kg単位を換算（4Kg = 40 x 100g）
+            let effectiveUnit = unit;
+            let unitDisplay = unit; // 表示用（例: "4Kg（40）"）
+            if (unitType === 'kg' && unit !== null) {
+                effectiveUnit = unit * 10; // 1Kg = 10 x 100g
+                unitDisplay = unit + 'Kg（' + effectiveUnit + '）';
+                console.log('重量換算: ', unit + 'Kg → ' + effectiveUnit + ' (100gあたり換算)');
+            } else if (unitType === 'g' && unit !== null) {
+                effectiveUnit = Math.max(1, Math.round(unit / 100)); // gを100g単位に換算
+                unitDisplay = unit + 'g（' + effectiveUnit + '）';
+                console.log('重量換算: ', unit + 'g → ' + effectiveUnit + ' (100gあたり換算)');
+            }
+
+            console.log('商品情報:', foundProd, { 規格: spec, 原価: cost, 売価: price, 入数: unit, 単位種別: unitType, 換算入数: effectiveUnit, 表示: unitDisplay });
+
+            // 税抜価格が取得できなかった場合のフォールバック
+            if (price === null && cost !== null) {
+                // 原価に1.3程度をかけて推定（フォールバック）
+                price = Math.round(cost * 1.3);
+            }
+
+            // 品名+規格+原価+売価でユニークなキーを生成
+            // 同じ品名+規格でも原価・売価が異なれば別行として扱う
+            let prodKey = baseProdName;
+            const existingInfo = pInfo[baseProdName];
+            if (existingInfo) {
+                // 既存の商品と原価・売価を比較
+                if ((cost !== null && existingInfo.cost !== cost) ||
+                    (price !== null && existingInfo.price !== price)) {
+                    // 原価または売価が異なる場合、価格を付加してユニークキーにする
+                    prodKey = baseProdName + '_' + (cost || 0) + '_' + (price || 0);
+                    console.log('価格差分による別商品化:', prodKey);
+                }
+            }
+
+            if (!pInfo[prodKey]) {
+                pInfo[prodKey] = { cost, price, unit: effectiveUnit, unitType, rawUnit: unit, unitDisplay };
+            }
+            prods.add(prodKey);
+
+            // 店舗別数量を登録
+            if (curDate) {
+                let addedCount = 0;
+                storeCols.forEach(sc => {
+                    const q = Number(row[sc.col]);
+                    if (q > 0) {
+                        data.push({
+                            fileName,
+                            supplier: sn,
+                            product: prodKey,
+                            date: curDate,
+                            store: sc.code,
+                            quantity: q
+                        });
+                        addedCount++;
+                    }
+                });
+                if (addedCount > 0) {
+                    console.log('データ追加:', prodKey, curDate, addedCount + '件');
+                }
+            } else {
+                console.log('日付なしのためスキップ:', prodKey, '行:', r);
+            }
+        }
+    });
+
+    console.log('=== 配分表パース結果 ===', { dataCount: data.length, productCount: prods.size });
+
+    return {
+        data,
+        sheets,
+        productInfo: pInfo,
+        products: Array.from(prods)
+    };
+}
+
+// フォーマット検出と適切なパーサー選択
+function detectAndParseWorkbook(wb, fileName) {
+    // 全シートをチェック
+    let isHaibun = false;
+    let isImpro = false;
+
+    for (const sheetName of wb.SheetNames) {
+        const sheet = wb.Sheets[sheetName];
+        const json = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+        for (let r = 0; r < Math.min(15, json.length); r++) {
+            const row = json[r] || [];
+            const rowStr = row.join('');
+
+            // 週間インプロ形式の検出（キーワード）
+            if (rowStr.indexOf('週間インプロ') >= 0 || rowStr.indexOf('インプロ') >= 0 ||
+                rowStr.indexOf('週間ダイヤ') >= 0 || rowStr.indexOf('ダイヤグラム') >= 0) {
+                isImpro = true;
+                console.log('週間インプロキーワード検出:', rowStr.substring(0, 50), 'row:', r);
+            }
+
+            // 特売原価/特売売価の検出（インプロ形式の特徴）
+            if (rowStr.indexOf('特売原価') >= 0 || rowStr.indexOf('特売売価') >= 0) {
+                isImpro = true;
+                console.log('特売原価/売価キーワード検出:', rowStr.substring(0, 50), 'row:', r);
+            }
+
+            // インプロ形式の構造検出（日付+曜日パターン）
+            if (/\d{1,2}\/\d{1,2}\([月火水木金土日]\)/.test(rowStr)) {
+                // 店舗コードが多数ある行がすでに見つかっていればインプロ
+                let storeCount = 0;
+                for (let c = 5; c < row.length; c++) {
+                    if (/^\d{1,3}$/.test(String(row[c] || '').trim())) storeCount++;
+                }
+                if (storeCount >= 3) {
+                    isImpro = true;
+                    console.log('日付+曜日パターンでインプロ検出:', rowStr.substring(0, 50), 'row:', r);
+                }
+            }
+
+            // 店舗コード行の検出（インプロ形式の特徴）
+            let storeCodes = 0;
+            for (let c = 5; c < row.length; c++) {
+                if (/^0?[1-9]\d?$/.test(String(row[c] || '').trim())) storeCodes++;
+            }
+            if (storeCodes >= 10) {
+                isImpro = true;
+                console.log('店舗コード行でインプロ検出:', storeCodes + '店舗', 'row:', r);
+            }
+
+            // 配分表のキーワード検出（インプロより優先度低）
+            if (!isImpro && (rowStr.indexOf('配分') >= 0 || rowStr.indexOf('商品連絡書') >= 0)) {
+                isHaibun = true;
+                console.log('配分キーワード検出:', rowStr.substring(0, 50), 'row:', r);
+            }
+
+            // ヘッダー行の特徴を確認（納品日 + 産地/品の組み合わせ）- インプロでなければ配分表
+            if (!isImpro) {
+                let hasNouhin = false, hasSanchi = false, hasHinmei = false;
+                for (let c = 0; c < Math.min(15, row.length); c++) {
+                    const cell = String(row[c] || '').trim();
+                    if (cell === '納品日' || cell === '納品') hasNouhin = true;
+                    if (cell === '産地') hasSanchi = true;
+                    if (cell === '品' || cell === '品名') hasHinmei = true;
+                }
+                if (hasNouhin && (hasSanchi || hasHinmei)) {
+                    isHaibun = true;
+                    console.log('ヘッダー構造で配分表を検出:', 'row:', r);
+                }
+            }
+
+            // インプロが確定したらループ終了
+            if (isImpro) break;
+        }
+        if (isHaibun || isImpro) break;
+    }
+
+    console.log('フォーマット判定結果:', { fileName, isHaibun, isImpro });
+
+    if (isImpro) {
+        const result = parseImproFormat(wb, fileName);
+        if (result.data.length === 0) {
+            console.log('インプロパース失敗、配分表形式を試行');
+            const haibunResult = parseHaibunFormat(wb, fileName);
+            if (haibunResult.data.length === 0) {
+                console.log('配分表パース失敗、従来形式を試行');
+                return parseWorkbook(wb, fileName);
+            }
+            return haibunResult;
+        }
+        return result;
+    } else if (isHaibun) {
+        const result = parseHaibunFormat(wb, fileName);
+        if (result.data.length === 0) {
+            console.log('配分表パース失敗、従来形式を試行');
+            return parseWorkbook(wb, fileName);
+        }
+        return result;
+    } else {
+        return parseWorkbook(wb, fileName);
+    }
+}
+
+// 週間インプロ形式のパーサー
+function parseImproFormat(wb, fileName) {
+    const data = [];
+    const sheets = [];
+    const pInfo = {};
+    const prods = new Set();
+
+    wb.SheetNames.forEach(sn => {
+        const sheet = wb.Sheets[sn];
+        const json = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+        if (json.length < 10) return;
+        sheets.push(sn);
+
+        console.log('=== インプロ形式パース開始 ===', sn);
+
+        // ヘッダー行を探す（品番、特売原価などがある行）
+        let headerRowIdx = -1;
+        let storeStartCol = -1;
+        const storeCols = [];
+
+        for (let r = 0; r < Math.min(15, json.length); r++) {
+            const row = json[r] || [];
+            const rowStr = row.map(c => String(c)).join('|');
+
+            // 店舗コードがある行を探す（01, 02, 03...または数字が連続）
+            let storeCodeCount = 0;
+            let firstStoreCol = -1;
+            for (let c = 5; c < row.length; c++) {
+                const cell = String(row[c] || '').trim();
+                if (/^\d{1,3}$/.test(cell)) {
+                    if (firstStoreCol < 0) firstStoreCol = c;
+                    storeCodeCount++;
+                }
+            }
+
+            if (storeCodeCount >= 5 && firstStoreCol > 0) {
+                headerRowIdx = r;
+                storeStartCol = firstStoreCol;
+                console.log('ヘッダー行検出:', r, '店舗開始列:', storeStartCol);
+
+                // 店舗コードを収集
+                for (let c = storeStartCol; c < row.length; c++) {
+                    const code = String(row[c] || '').trim();
+                    if (/^\d{1,3}$/.test(code)) {
+                        const normalizedCode = String(parseInt(code, 10));
+                        storeCols.push({ col: c, code: normalizedCode });
+                    }
+                }
+                break;
+            }
+        }
+
+        if (headerRowIdx < 0 || storeCols.length === 0) {
+            console.log('ヘッダー行または店舗コードが見つかりません');
+            return;
+        }
+
+        console.log('検出された店舗:', storeCols.length, '件');
+
+        // データ行をパース
+        let curProdName = null;
+        let curCost = null;
+        let curPrice = null;
+        let curUnit = 1;
+
+        for (let r = headerRowIdx + 1; r < json.length; r++) {
+            const row = json[r];
+            if (!row || row.length === 0) continue;
+
+            // この行に日付があるかチェック
+            let dateStr = null;
+            let dateCol = -1;
+            for (let c = 0; c < Math.min(8, row.length); c++) {
+                const cell = String(row[c] || '').trim();
+                const dateMatch = cell.match(/(\d{1,2})\/(\d{1,2})/);
+                if (dateMatch) {
+                    dateStr = parseInt(dateMatch[1]) + '/' + parseInt(dateMatch[2]);
+                    dateCol = c;
+                    break;
+                }
+            }
+
+            if (!dateStr) continue; // 日付がない行はスキップ
+
+            // 最初の列から品名を抽出（品番・JAN・品名が結合されている場合）
+            const firstCol = String(row[0] || '');
+            if (firstCol.length > 10 && /[ぁ-んァ-ン一-龥]/.test(firstCol)) {
+                // 日本語部分を抽出（県産、産地名、品名など）
+                const jpMatch = firstCol.match(/([ぁ-んァ-ン一-龥][ぁ-んァ-ン一-龥\u3000-\u303f\s\d０-９Ａ-Ｚａ-ｚA-Za-z・（）()]+)/);
+                if (jpMatch && jpMatch[1].length >= 4) {
+                    curProdName = extractProductName(jpMatch[1].trim());
+                    console.log('品名検出(結合セル):', curProdName, '行:', r, '元:', firstCol.substring(0, 50));
+                }
+            }
+
+            // 原価・売価を探す
+            // まず「原価　売価」形式のセルを探す（例: "300　　　　　　　398"）
+            for (let c = 1; c < Math.min(storeStartCol, 6); c++) {
+                const cell = String(row[c] || '');
+                // 全角スペースや空白で区切られた2つの数字を探す
+                const priceMatch = cell.match(/(\d+)[　\s]+(\d+)/);
+                if (priceMatch) {
+                    const val1 = parseInt(priceMatch[1]);
+                    const val2 = parseInt(priceMatch[2]);
+                    if (val1 >= 10 && val1 < 50000 && val2 >= 10 && val2 < 50000) {
+                        if (val1 < val2) {
+                            curCost = val1;
+                            curPrice = val2;
+                        } else {
+                            curCost = val2;
+                            curPrice = val1;
+                        }
+                        console.log('原価売価検出(結合セル):', curCost, curPrice, '列:', c);
+                        break;
+                    }
+                }
+            }
+
+            // 入数を探す（容量単位セルから）
+            for (let c = 3; c < Math.min(storeStartCol, 6); c++) {
+                const cell = String(row[c] || '');
+                // "1" や入数を表す数字を探す
+                const unitMatch = cell.match(/^\s*(\d+)\s*$/);
+                if (unitMatch) {
+                    const val = parseInt(unitMatch[1]);
+                    if (val >= 1 && val <= 100) {
+                        curUnit = val;
+                        break;
+                    }
+                }
+            }
+
+            // 店舗別数量をチェック
+            let hasQty = false;
+            let totalQty = 0;
+            storeCols.forEach(sc => {
+                const q = Number(row[sc.col]);
+                if (q > 0) {
+                    hasQty = true;
+                    totalQty += q;
+                }
+            });
+
+            if (!hasQty) continue;
+
+            // 品名がない場合はスキップ
+            if (!curProdName) {
+                console.log('品名なしでスキップ:', '行:', r, '日付:', dateStr, '数量:', totalQty);
+                continue;
+            }
+
+            // 商品情報を登録
+            const prodKey = curProdName;
+            if (!pInfo[prodKey]) {
+                pInfo[prodKey] = { cost: curCost, price: curPrice, unit: curUnit };
+            }
+            prods.add(prodKey);
+
+            // 店舗別数量を登録
+            let addedCount = 0;
+            storeCols.forEach(sc => {
+                const q = Number(row[sc.col]);
+                if (q > 0) {
+                    data.push({
+                        fileName,
+                        supplier: sn,
+                        product: prodKey,
+                        date: dateStr,
+                        store: sc.code,
+                        quantity: q
+                    });
+                    addedCount++;
+                }
+            });
+
+            if (addedCount > 0) {
+                console.log('データ追加:', prodKey, dateStr, addedCount + '件');
+            }
+        }
+    });
+
+    console.log('=== インプロパース結果 ===', { dataCount: data.length, productCount: prods.size });
+
+    return {
+        data,
+        sheets,
+        productInfo: pInfo,
+        products: Array.from(prods)
+    };
+}
+
 function mergeAllData() {
     const allData = [], allStores = new Set(), allDates = new Set(), allSuppliers = new Set(), allProds = new Set();
     productInfo = {};
@@ -1906,7 +2897,7 @@ function updateTable() {
         if (showPrice)
             html += '<td class="info info-price">' + (info.price || '-') + '</td>';
         if (showUnit)
-            html += '<td class="info">' + (info.unit || '-') + '</td>';
+            html += '<td class="info">' + (info.unitDisplay || info.unit || '-') + '</td>';
         dates.forEach(function (d, ci) {
             const v = row[d] || 0;
             const store = Array.from(selectedStores)[0];
